@@ -28,7 +28,7 @@ This tool solves that problem by parsing the JSONL session files and exporting t
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/claude-session-viewer.git
+git clone https://github.com/jtklinger/claude-session-viewer.git
 cd claude-session-viewer
 
 # Run directly (no installation needed)
@@ -287,4 +287,4 @@ Created to solve the problem of viewing Claude Code conversation history after t
 
 ## Contact
 
-Issues and feature requests: [GitHub Issues](https://github.com/YOUR_USERNAME/claude-session-viewer/issues)
+Issues and feature requests: [GitHub Issues](https://github.com/jtklinger/claude-session-viewer/issues)
