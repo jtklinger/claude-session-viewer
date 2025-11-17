@@ -116,21 +116,45 @@ def get_most_recent_session():
     most_recent = max(session_files, key=lambda f: f.stat().st_mtime)
     return most_recent
 
-def format_message_content(content):
+def format_message_content(content, include_tool_results=True):
     """Format message content for display."""
     if isinstance(content, str):
         return content
     elif isinstance(content, list):
-        # Handle content blocks (text and tool use)
+        # Handle content blocks (text, tool use, tool results, thinking, images)
         parts = []
         for block in content:
             if isinstance(block, dict):
-                if block.get('type') == 'text':
+                block_type = block.get('type')
+
+                if block_type == 'text':
                     parts.append(block.get('text', ''))
-                elif block.get('type') == 'tool_use':
+
+                elif block_type == 'tool_use':
                     tool_name = block.get('name', 'unknown')
                     tool_input = json.dumps(block.get('input', {}), indent=2)
                     parts.append(f"\n**[Tool Use: {tool_name}]**\n```json\n{tool_input}\n```\n")
+
+                elif block_type == 'tool_result' and include_tool_results:
+                    tool_use_id = block.get('tool_use_id', 'unknown')
+                    is_error = block.get('is_error', False)
+                    result_content = block.get('content', '')
+                    parts.append(format_tool_result(tool_use_id, result_content, is_error))
+
+                elif block_type == 'thinking':
+                    thinking_text = block.get('thinking', '')
+                    # Truncate very long thinking blocks
+                    max_length = 3000
+                    if len(thinking_text) > max_length:
+                        thinking_text = thinking_text[:max_length] + f"\n... (truncated, {len(thinking_text)} total chars)"
+                    parts.append(f"\n**[Extended Thinking]**\n```\n{thinking_text}\n```\n")
+
+                elif block_type == 'image':
+                    source = block.get('source', {})
+                    media_type = source.get('media_type', 'unknown')
+                    data_size = len(source.get('data', ''))
+                    parts.append(f"\n**[Image: {media_type}, {data_size} bytes]**\n")
+
             elif isinstance(block, str):
                 parts.append(block)
         return '\n'.join(parts)
@@ -181,24 +205,25 @@ def parse_session(session_file, output_file=None):
                     content = message.get('content', '')
                     timestamp = data.get('timestamp')
 
+                    # Extract metadata
+                    metadata = {}
+                    metadata['model'] = message.get('model')
+                    metadata['stop_reason'] = message.get('stop_reason')
+
+                    # Extract usage statistics if available
+                    usage = message.get('usage', {})
+                    if usage:
+                        metadata['input_tokens'] = usage.get('input_tokens')
+                        metadata['output_tokens'] = usage.get('output_tokens')
+                        metadata['cache_creation_input_tokens'] = usage.get('cache_creation_input_tokens')
+                        metadata['cache_read_input_tokens'] = usage.get('cache_read_input_tokens')
+
                     messages.append({
                         'role': 'assistant',
                         'content': format_message_content(content),
                         'timestamp': timestamp,
-                        'line': line_num
-                    })
-
-                elif msg_type == 'tool-result':
-                    # Tool results
-                    content = data.get('content', '')
-                    tool_use_id = data.get('toolUseId', 'unknown')
-                    is_error = data.get('isError', False)
-
-                    messages.append({
-                        'role': 'tool-result',
-                        'content': format_tool_result(tool_use_id, content, is_error),
-                        'timestamp': data.get('timestamp'),
-                        'line': line_num
+                        'line': line_num,
+                        'metadata': metadata
                     })
 
             except json.JSONDecodeError as e:
@@ -226,9 +251,32 @@ def parse_session(session_file, output_file=None):
 
         elif role == 'assistant':
             markdown_lines.append(f"\n## Message {i}: Assistant\n")
-            markdown_lines.append(f"{content}\n")
 
-        elif role == 'tool-result':
+            # Add metadata if available
+            metadata = msg.get('metadata', {})
+            if metadata:
+                meta_parts = []
+                if metadata.get('model'):
+                    meta_parts.append(f"Model: `{metadata['model']}`")
+                if metadata.get('stop_reason'):
+                    meta_parts.append(f"Stop: `{metadata['stop_reason']}`")
+                if metadata.get('input_tokens') is not None or metadata.get('output_tokens') is not None:
+                    tokens_str = f"Tokens: "
+                    token_parts = []
+                    if metadata.get('input_tokens'):
+                        token_parts.append(f"in={metadata['input_tokens']}")
+                    if metadata.get('output_tokens'):
+                        token_parts.append(f"out={metadata['output_tokens']}")
+                    if metadata.get('cache_read_input_tokens'):
+                        token_parts.append(f"cache_read={metadata['cache_read_input_tokens']}")
+                    if metadata.get('cache_creation_input_tokens'):
+                        token_parts.append(f"cache_create={metadata['cache_creation_input_tokens']}")
+                    tokens_str += ", ".join(token_parts)
+                    meta_parts.append(tokens_str)
+
+                if meta_parts:
+                    markdown_lines.append(f"*{' | '.join(meta_parts)}*\n")
+
             markdown_lines.append(f"{content}\n")
 
     markdown_content = '\n'.join(markdown_lines)

@@ -1,21 +1,39 @@
 # Claude Code Session Viewer
 
-A Python utility to parse and view Claude Code conversation history in a readable markdown format.
+A comprehensive toolkit for viewing, browsing, and resuming Claude Code conversation sessions. Includes both a command-line parser for exporting sessions to markdown and an interactive TUI for browsing your session history with permanent memory!
 
 ## Overview
 
 When using [Claude Code](https://claude.com/claude-code), conversation sessions are stored as JSONL files in `~/.claude/projects/`. While Claude can resume these sessions and load the context, the conversation history isn't re-displayed in your terminal after resuming.
 
-This tool solves that problem by parsing the JSONL session files and exporting them to readable markdown documents that you can open in your IDE or text editor.
+This toolkit provides two complementary tools:
+
+1. **`view-claude-session.py`** - Command-line parser that exports sessions to readable markdown
+2. **`claude-session-tui.py`** - Interactive TUI for browsing, viewing, and resuming sessions (like giving Claude permanent memory!)
 
 ## Features
 
-- 📜 **Parse any Claude Code session** - View complete conversation history
-- 🔍 **List recent sessions** - See all your past conversations with metadata
-- 📊 **Rich formatting** - Markdown output with syntax highlighting for code blocks
-- 🛠️ **Tool tracking** - See all tool uses and their results
-- ⚡ **Fast and lightweight** - Pure Python with no external dependencies
-- 📱 **Cross-platform** - Works on Windows, macOS, and Linux
+### Interactive TUI (`claude-session-tui.py`) ⭐ NEW!
+
+- 🖥️ **Interactive Terminal Interface** - Browse all your Claude sessions in a beautiful TUI
+- 🔍 **Search & Filter** - Quickly find sessions by ID, workspace, or directory
+- 📊 **Session Analytics** - View token usage, tool statistics, and conversation metrics
+- 💬 **Full Conversation View** - Read entire conversations with metadata and syntax highlighting
+- 🚀 **Resume Sessions** - Launch sessions directly from the viewer (same terminal or new window)
+- 🧠 **Permanent Memory** - Never forget what you discussed with Claude!
+- 📁 **Multi-Workspace Support** - Browse sessions across all your projects
+- ⌨️ **Keyboard-Driven** - Fast navigation with vim-style bindings
+
+### Command-Line Parser (`view-claude-session.py`)
+
+- 📜 **Export to Markdown** - Convert any session to readable markdown format
+- 🔍 **List Sessions** - See all your past conversations with metadata
+- 🎯 **Extended Thinking Support** - View Claude's extended thinking blocks
+- 🖼️ **Image Detection** - Identify image content in conversations
+- 📊 **Rich Metadata** - Model info, token usage, cache statistics
+- 🛠️ **Complete Tool Tracking** - See all tool uses and their results (including nested tool results)
+- ⚡ **Fast and Lightweight** - Pure Python, minimal dependencies
+- 📱 **Cross-Platform** - Works on Windows, macOS, and Linux
 
 ## Installation
 
@@ -31,8 +49,22 @@ This tool solves that problem by parsing the JSONL session files and exporting t
 git clone https://github.com/jtklinger/claude-session-viewer.git
 cd claude-session-viewer
 
-# Run directly (no installation needed)
+# For the command-line parser only (no dependencies)
 python view-claude-session.py
+
+# For the interactive TUI (requires textual)
+pip install -r requirements.txt
+python claude-session-tui.py
+```
+
+### Install TUI Dependencies
+
+```bash
+# Install required packages for the interactive TUI
+pip install textual rich pygments
+
+# Or use requirements.txt
+pip install -r requirements.txt
 ```
 
 ### Optional: Add to PATH
@@ -57,6 +89,66 @@ python view-claude-session.py --list
 ```
 
 ## Usage
+
+## Interactive TUI Mode (`claude-session-tui.py`) ⭐
+
+### Launch the TUI
+
+```bash
+# Browse all sessions from all workspaces
+python claude-session-tui.py
+
+# Browse sessions from a specific workspace
+python claude-session-tui.py --workspace C--Users-jtkli
+```
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| **↑/↓** | Navigate session list |
+| **Enter** | View selected session details |
+| **Ctrl+R** | Resume session in current terminal (exits TUI) |
+| **Ctrl+N** | Resume session in new Windows Terminal window |
+| **R** | Refresh session list |
+| **Tab** | Switch between tabs (Sessions/Conversation/Analytics) |
+| **Escape** | Back to session list |
+| **?** | Show help |
+| **Q** | Quit |
+
+### TUI Features
+
+**Sessions Tab:**
+- Browse all your Claude sessions with metadata
+- Search by session ID, workspace, or directory
+- See message count, token usage, and file size at a glance
+- Sort by date (most recent first)
+
+**Conversation Tab:**
+- Read full conversation history
+- View model information and token usage per message
+- See all tool uses and results
+- Syntax highlighting for code and JSON
+
+**Analytics Tab:**
+- Total token usage (input/output/cache)
+- Tool usage statistics
+- Conversation timeline
+- Session duration
+
+### Resuming Sessions
+
+**Same Terminal (Ctrl+R):**
+- Select a session and press Ctrl+R
+- TUI exits and runs `claude --resume <session-id>`
+- Continue your conversation where you left off
+
+**New Terminal (Ctrl+N):**
+- Select a session and press Ctrl+N
+- Opens new Windows Terminal tab with the resumed session
+- Keep the TUI open to browse other sessions
+
+## Command-Line Parser Mode (`view-claude-session.py`)
 
 ### View Most Recent Session
 
@@ -121,9 +213,12 @@ The exported markdown file includes:
 
 - **Session metadata** - Session ID, file path, message count, generation timestamp
 - **User messages** - All prompts you sent to Claude
-- **Assistant messages** - All responses from Claude
+- **Assistant messages** - All responses from Claude with model and token usage metadata
+- **Extended Thinking** - Claude's extended thinking blocks (when present)
 - **Tool usage** - Commands executed (Bash, Edit, Read, etc.) with parameters
-- **Tool results** - Output from tool executions (truncated if very long)
+- **Tool results** - Output from tool executions (properly handles nested results)
+- **Images** - Image content indicators with media type and size
+- **Token Statistics** - Input/output tokens, cache hits/creation per message
 
 Example output structure:
 ```markdown
@@ -141,6 +236,8 @@ check the health of the n8n-pod on kvm02
 
 ## Message 2: Assistant
 
+*Model: `claude-sonnet-4-5-20250929` | Stop: `tool_use` | Tokens: in=245, out=87, cache_read=12450*
+
 I'll check the pod health on kvm02...
 
 **[Tool Use: mcp__ssh-mcp-kvm02__exec]**
@@ -149,6 +246,8 @@ I'll check the pod health on kvm02...
   "command": "podman pod ps"
 }
 ```
+
+## Message 3: User
 
 **[Tool Result: SUCCESS]**
 ```
@@ -159,9 +258,29 @@ abc123def     n8n-pod   Running   2 days ago  xyz789
 
 ## Use Cases
 
+### Permanent Memory with the TUI ⭐
+
+The interactive TUI gives Claude effectively "permanent memory" across sessions:
+
+```bash
+# Launch the TUI
+python claude-session-tui.py
+
+# Browse your session history
+# Press Enter to view any past conversation
+# Press Ctrl+R to resume where you left off
+```
+
+**Why this is powerful:**
+- Remember what you discussed weeks ago
+- Continue complex projects across multiple days
+- Find that perfect prompt you used before
+- Review what worked and what didn't
+- Share context between different Claude sessions
+
 ### After System Reboot
 
-If you exit Claude Code and reboot your workstation, your terminal scrollback is lost. Use this tool to review what was discussed:
+If you exit Claude Code and reboot your workstation, your terminal scrollback is lost. Use the TUI or parser to review what was discussed:
 
 ```bash
 python view-claude-session.py --list
@@ -224,12 +343,30 @@ This script:
 
 ## Limitations
 
-- **No external dependencies**, but also no advanced parsing
+### Command-Line Parser
+
 - **Large sessions** (>1000 messages) create large markdown files
-- **Tool results are truncated** at 2000 characters to keep files manageable
-- **Some internal Claude Code metadata** is not included (checkpoints, file snapshots, etc.)
+- **Tool results and thinking blocks are truncated** to keep files manageable
+- **Some internal Claude Code metadata** is not included (checkpoints, file snapshots, summaries)
+
+### Interactive TUI
+
+- **Requires Textual** - Adds a dependency (unlike the parser which is pure Python)
+- **New terminal resume on Windows only** - Ctrl+N uses `wt.exe` (Windows Terminal)
+- **Large sessions may take time to load** - Full conversation view loads all messages
+- **Agent sessions hidden by default** - Agent sub-task sessions don't appear in the session list (but can be viewed if you know the ID)
 
 ## Tips
+
+### TUI Tips
+
+- **Bookmark the TUI** - Make it your go-to tool for browsing Claude sessions
+- **Use search** - Type in the search box to quickly filter sessions
+- **Check analytics** - View token usage to understand API consumption
+- **Resume sessions** - Use Ctrl+R to continue old conversations
+- **Multi-workspace** - Browse all projects at once or filter with `--workspace`
+
+### Parser Tips
 
 - Use `--list` regularly to see your session history
 - Export important conversations for documentation
@@ -242,12 +379,16 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ### Ideas for Contributions
 
-- Add filtering by date range
+- Add filtering by date range in TUI
 - Export to other formats (HTML, PDF, JSON)
-- Interactive TUI for browsing sessions
-- Search within sessions before exporting
+- ~~Interactive TUI for browsing sessions~~ ✅ Implemented!
+- Search within conversation content (not just metadata)
 - Include checkpoint information
-- Statistics and analytics on tool usage
+- ~~Statistics and analytics on tool usage~~ ✅ Implemented!
+- Session comparison (diff between sessions)
+- Export sessions directly from TUI
+- Session tagging and categorization
+- Cost estimation based on token usage and pricing
 
 ## License
 
