@@ -593,12 +593,17 @@ class SessionViewerApp(App):
         table = self.query_one("#session-table", DataTable)
 
         # Get the currently highlighted row (cursor position)
-        if table.cursor_row is None:
+        if table.cursor_row is None or table.cursor_row < 0:
             self.notify("No session highlighted", severity="warning")
             return
 
-        # Get the session ID from the row key
-        session_id = table.cursor_row.value
+        # Get the row key at cursor position
+        try:
+            row_key = table.ordered_rows[table.cursor_row]
+            session_id = row_key.value
+        except Exception as e:
+            self.notify(f"Could not get session from cursor position: {e}", severity="error")
+            return
 
         if session_id in self.selected_for_delete:
             self.selected_for_delete.remove(session_id)
@@ -628,12 +633,18 @@ class SessionViewerApp(App):
         table = self.query_one("#session-table", DataTable)
 
         # Get the currently highlighted row (cursor position)
-        if table.cursor_row is None:
+        if table.cursor_row is None or table.cursor_row < 0:
             self.notify("No session highlighted", severity="warning")
             return
 
-        # Get the session ID from the row key
-        session_id = table.cursor_row.value
+        # Get the row key at cursor position
+        try:
+            row_key = table.ordered_rows[table.cursor_row]
+            session_id = row_key.value
+        except Exception as e:
+            self.notify(f"Could not get session: {e}", severity="error")
+            return
+
         self.selected_session = next(
             (s for s in self.sessions if s.session_id == session_id),
             None
@@ -762,12 +773,17 @@ class SessionViewerApp(App):
         table = self.query_one("#session-table", DataTable)
 
         # Get the currently highlighted row (cursor position)
-        if table.cursor_row is None:
+        if table.cursor_row is None or table.cursor_row < 0:
             self.notify("No session highlighted", severity="warning")
             return
 
-        # Get the session ID from the row key
-        session_id = table.cursor_row.value
+        # Get the row key at cursor position
+        try:
+            row_key = table.ordered_rows[table.cursor_row]
+            session_id = row_key.value
+        except Exception as e:
+            self.notify(f"Could not get session: {e}", severity="error")
+            return
 
         # Exit the app and resume in the same terminal
         self.exit(result=("resume_same", session_id))
@@ -777,12 +793,17 @@ class SessionViewerApp(App):
         table = self.query_one("#session-table", DataTable)
 
         # Get the currently highlighted row (cursor position)
-        if table.cursor_row is None:
+        if table.cursor_row is None or table.cursor_row < 0:
             self.notify("No session highlighted", severity="warning")
             return
 
-        # Get the session ID from the row key
-        session_id = table.cursor_row.value
+        # Get the row key at cursor position
+        try:
+            row_key = table.ordered_rows[table.cursor_row]
+            session_id = row_key.value
+        except Exception as e:
+            self.notify(f"Could not get session: {e}", severity="error")
+            return
 
         try:
             # For Windows Terminal
@@ -811,12 +832,18 @@ class SessionViewerApp(App):
             # Delete only the currently highlighted session
             table = self.query_one("#session-table", DataTable)
 
-            if table.cursor_row is None:
+            if table.cursor_row is None or table.cursor_row < 0:
                 self.notify("No session highlighted", severity="warning")
                 return
 
-            # Get the session ID from the row key
-            session_id = table.cursor_row.value
+            # Get the row key at cursor position
+            try:
+                row_key = table.ordered_rows[table.cursor_row]
+                session_id = row_key.value
+            except Exception as e:
+                self.notify(f"Could not get session: {e}", severity="error")
+                return
+
             current_session = next(
                 (s for s in self.sessions if s.session_id == session_id),
                 None
