@@ -107,8 +107,9 @@ python claude-session-tui.py --workspace C--Users-jtkli
 | Key | Action |
 |-----|--------|
 | **↑/↓** | Navigate session list |
-| **Enter** | View selected session (auto-loads conversation) |
-| **D** | Delete selected session (with confirmation) |
+| **Enter** | View selected session details |
+| **Space** | Toggle selection for multi-delete (shows ✓ indicator) |
+| **D** | Delete selected session(s) with confirmation |
 | **Ctrl+R** | Resume session in current terminal (exits TUI) |
 | **Ctrl+N** | Resume session in new Windows Terminal window |
 | **R** | Refresh session list |
@@ -125,7 +126,8 @@ python claude-session-tui.py --workspace C--Users-jtkli
 - Search by description, session ID, workspace, or directory
 - See message count, token usage, and file size at a glance
 - Sort by date (most recent first)
-- Delete sessions with confirmation (press 'D')
+- Multi-select sessions with Space bar (shows ✓ indicator)
+- Delete single or multiple sessions with confirmation (press 'D')
 
 **Conversation Tab:**
 - Read full conversation history
@@ -156,10 +158,24 @@ python claude-session-tui.py --workspace C--Users-jtkli
 - Opens new Windows Terminal tab with the resumed session
 - Keep the TUI open to browse other sessions
 
-**Deleting Sessions (D):**
-- Select a session and press 'D'
-- Confirm deletion (especially useful for cleaning up empty sessions)
+**Deleting Sessions:**
+
+*Single Session:*
+- Navigate to a session and press 'D'
+- Confirm deletion
 - Session file is permanently deleted
+
+*Multiple Sessions (Bulk Delete):*
+1. Press **Space** on first session (✓ indicator appears)
+2. Navigate to other sessions and press **Space** to select them
+3. Press **D** to delete all selected sessions at once
+4. Confirmation shows total count and message count
+5. Perfect for cleaning up multiple empty or test sessions
+
+*Tips:*
+- Space bar toggles selection (press again to deselect)
+- Selected sessions show a ✓ checkmark in the description
+- Delete works on current session if nothing is multi-selected
 
 ## Command-Line Parser Mode (`view-claude-session.py`)
 

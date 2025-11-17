@@ -485,7 +485,8 @@ class SessionViewerApp(App):
         Binding("q", "quit", "Quit", priority=True),
         Binding("?", "help", "Help"),
         Binding("r", "refresh", "Refresh"),
-        Binding("d", "delete_session", "Delete Session"),
+        Binding("space", "toggle_selection", "Toggle Selection"),
+        Binding("d", "delete_session", "Delete Session(s)"),
         Binding("enter", "view_session", "View Session"),
         Binding("ctrl+r", "resume_session", "Resume (Same Terminal)"),
         Binding("ctrl+n", "resume_new_terminal", "Resume (New Terminal)"),
@@ -500,6 +501,7 @@ class SessionViewerApp(App):
         self.workspace_filter = workspace
         self.sessions: List[SessionMetadata] = []
         self.selected_session: Optional[SessionMetadata] = None
+        self.selected_for_delete: set = set()  # Track multi-selected sessions
         self.current_view = "list"  # 'list', 'detail', 'analytics'
 
     def compose(self) -> ComposeResult:
@@ -556,9 +558,14 @@ class SessionViewerApp(App):
             tokens_str = f"{session.total_input_tokens + session.total_output_tokens:,}"
             size_str = f"{session.size_bytes / 1024 / 1024:.1f} MB"
 
+            # Add selection indicator
+            description = session.description or "[No description]"
+            if session.session_id in self.selected_for_delete:
+                description = f"[✓] {description}"
+
             table.add_row(
                 date_str,
-                session.description or "[No description]",
+                description,
                 session.workspace,
                 str(session.message_count),
                 tokens_str,
@@ -579,9 +586,30 @@ class SessionViewerApp(App):
                 (s for s in self.sessions if s.session_id == session_id),
                 None
             )
-            # Auto-load conversation when row is selected
-            if self.selected_session:
-                self.action_view_session()
+            # Don't auto-load - let user press Enter explicitly
+
+    def action_toggle_selection(self) -> None:
+        """Toggle selection of the current session for multi-delete."""
+        if not self.selected_session:
+            self.notify("No session selected", severity="warning")
+            return
+
+        session_id = self.selected_session.session_id
+
+        if session_id in self.selected_for_delete:
+            self.selected_for_delete.remove(session_id)
+        else:
+            self.selected_for_delete.add(session_id)
+
+        # Refresh table to show selection indicators
+        search_input = self.query_one("#search-input", Input)
+        self.populate_table(search_input.value)
+
+        count = len(self.selected_for_delete)
+        if count > 0:
+            self.notify(f"{count} session(s) selected for deletion", severity="information")
+        else:
+            self.notify("Selection cleared", severity="information")
 
     def action_view_session(self) -> None:
         """View the selected session in detail."""
@@ -733,49 +761,83 @@ class SessionViewerApp(App):
             self.notify(f"Error launching terminal: {e}", severity="error")
 
     def action_delete_session(self) -> None:
-        """Delete the selected session after confirmation."""
-        if not self.selected_session:
+        """Delete selected session(s) after confirmation."""
+        # Determine what to delete: multi-selected or current session
+        sessions_to_delete = []
+
+        if self.selected_for_delete:
+            # Delete all multi-selected sessions
+            sessions_to_delete = [
+                s for s in self.sessions
+                if s.session_id in self.selected_for_delete
+            ]
+        elif self.selected_session:
+            # Delete only the current session
+            sessions_to_delete = [self.selected_session]
+        else:
             self.notify("No session selected", severity="warning")
             return
 
-        session_id = self.selected_session.session_id
-        description = self.selected_session.description or session_id[:12]
+        # Build confirmation message
+        count = len(sessions_to_delete)
+        if count == 1:
+            session = sessions_to_delete[0]
+            description = session.description or session.session_id[:12]
+            message_count = session.message_count
+            if message_count == 0:
+                confirm_msg = f"Delete empty session '{description}'?"
+            else:
+                confirm_msg = f"Delete session '{description}' ({message_count} messages)?\n\nThis cannot be undone!"
+        else:
+            total_messages = sum(s.message_count for s in sessions_to_delete)
+            confirm_msg = f"Delete {count} sessions ({total_messages} total messages)?\n\nThis cannot be undone!"
 
-        # Simple confirmation - use a callback approach
+        # Callback for confirmation
         def confirm_delete(confirmed: bool) -> None:
             if confirmed:
+                deleted_count = 0
+                errors = []
+
                 try:
-                    # Delete the file
-                    self.selected_session.file_path.unlink()
-                    self.notify(f"Deleted session: {description}", severity="information")
+                    for session in sessions_to_delete:
+                        try:
+                            session.file_path.unlink()
+                            deleted_count += 1
+                        except Exception as e:
+                            errors.append(f"{session.session_id[:8]}: {str(e)}")
+
+                    # Report results
+                    if deleted_count > 0:
+                        self.notify(f"Deleted {deleted_count} session(s)", severity="information")
+
+                    if errors:
+                        error_msg = "\n".join(errors[:3])  # Show first 3 errors
+                        if len(errors) > 3:
+                            error_msg += f"\n...and {len(errors) - 3} more"
+                        self.notify(f"Errors:\n{error_msg}", severity="error")
 
                     # Reload sessions
                     self.load_sessions()
                     search_input = self.query_one("#search-input", Input)
                     self.populate_table(search_input.value)
 
-                    # Clear selection
+                    # Clear selections
                     self.selected_session = None
+                    self.selected_for_delete.clear()
 
                     # Go back to list
                     tabbed = self.query_one(TabbedContent)
                     tabbed.active = "browser"
+
                 except Exception as e:
-                    self.notify(f"Error deleting session: {e}", severity="error")
+                    self.notify(f"Error deleting sessions: {e}", severity="error")
 
-        # Show confirmation message
-        message_count = self.selected_session.message_count
-        if message_count == 0:
-            confirm_msg = f"Delete empty session '{description}'?"
-        else:
-            confirm_msg = f"Delete session '{description}' ({message_count} messages)? This cannot be undone!"
-
-        # Use a simple approach: push a confirmation screen
+        # Show confirmation dialog
         from textual.screen import ModalScreen
         from textual.widgets import Button, Label
 
         class ConfirmDeleteScreen(ModalScreen):
-            """Confirmation dialog for deleting a session."""
+            """Confirmation dialog for deleting session(s)."""
 
             def compose(self) -> ComposeResult:
                 with Container(id="confirm-dialog"):
@@ -812,12 +874,13 @@ class SessionViewerApp(App):
 
 ## Navigation
 - **↑/↓** - Navigate session list
-- **Enter** - View selected session (auto-loads conversation)
+- **Enter** - View selected session details
 - **Escape** - Back to session list
 - **Tab** - Switch between tabs
 
 ## Session Actions
-- **D** - Delete selected session (with confirmation)
+- **Space** - Toggle selection for multi-delete (shows ✓ indicator)
+- **D** - Delete selected session(s) (with confirmation)
 - **Ctrl+R** - Resume session in current terminal (exits viewer)
 - **Ctrl+N** - Resume session in new Windows Terminal window
 
@@ -826,6 +889,12 @@ class SessionViewerApp(App):
 - **?** - Show this help
 - **Q** - Quit application
 
+## Multi-Select Delete Workflow
+1. Press **Space** on sessions you want to delete (✓ appears)
+2. Continue selecting multiple sessions
+3. Press **D** to delete all selected sessions at once
+4. Or just press **D** on a single session without Space
+
 ## Search
 Type in the search box to filter sessions by description, ID, workspace, or directory.
 
@@ -833,6 +902,7 @@ Type in the search box to filter sessions by description, ID, workspace, or dire
 - Empty sessions (0 messages) are automatically filtered out
 - Sessions are sorted by most recent first
 - Description shows the first user message from each conversation
+- Selected sessions show a ✓ indicator
 
 ---
 Press Escape to close this help.
