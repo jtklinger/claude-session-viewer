@@ -107,7 +107,8 @@ python claude-session-tui.py --workspace C--Users-jtkli
 | Key | Action |
 |-----|--------|
 | **↑/↓** | Navigate session list |
-| **Enter** | View selected session details |
+| **Enter** | View selected session (auto-loads conversation) |
+| **D** | Delete selected session (with confirmation) |
 | **Ctrl+R** | Resume session in current terminal (exits TUI) |
 | **Ctrl+N** | Resume session in new Windows Terminal window |
 | **R** | Refresh session list |
@@ -119,10 +120,12 @@ python claude-session-tui.py --workspace C--Users-jtkli
 ### TUI Features
 
 **Sessions Tab:**
-- Browse all your Claude sessions with metadata
-- Search by session ID, workspace, or directory
+- Browse all your Claude sessions with descriptive summaries (shows first user message)
+- Automatically filters out empty sessions (0 messages)
+- Search by description, session ID, workspace, or directory
 - See message count, token usage, and file size at a glance
 - Sort by date (most recent first)
+- Delete sessions with confirmation (press 'D')
 
 **Conversation Tab:**
 - Read full conversation history
@@ -136,7 +139,12 @@ python claude-session-tui.py --workspace C--Users-jtkli
 - Conversation timeline
 - Session duration
 
-### Resuming Sessions
+### Browsing and Resuming Sessions
+
+**Viewing Sessions:**
+- Select any session with ↑/↓ or click on it
+- Conversation automatically loads and displays
+- Switch between Sessions/Conversation/Analytics tabs to explore
 
 **Same Terminal (Ctrl+R):**
 - Select a session and press Ctrl+R
@@ -147,6 +155,11 @@ python claude-session-tui.py --workspace C--Users-jtkli
 - Select a session and press Ctrl+N
 - Opens new Windows Terminal tab with the resumed session
 - Keep the TUI open to browse other sessions
+
+**Deleting Sessions (D):**
+- Select a session and press 'D'
+- Confirm deletion (especially useful for cleaning up empty sessions)
+- Session file is permanently deleted
 
 ## Command-Line Parser Mode (`view-claude-session.py`)
 

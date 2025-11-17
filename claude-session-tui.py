@@ -60,6 +60,7 @@ class SessionMetadata:
     total_cache_create_tokens: int = 0
     tool_usage: Dict[str, int] = None
     cwd: Optional[str] = None
+    description: Optional[str] = None  # First user message or description
 
     def __post_init__(self):
         if self.tool_usage is None:
@@ -158,6 +159,7 @@ class SessionLoader:
         total_cache_create = 0
         tool_usage = defaultdict(int)
         cwd = None
+        first_user_message = None
 
         try:
             with open(session_file, 'r', encoding='utf-8') as f:
@@ -174,6 +176,22 @@ class SessionLoader:
                                 if not first_timestamp:
                                     first_timestamp = timestamp
                                 last_timestamp = timestamp
+
+                            # Extract first user message for description
+                            if msg_type == 'user' and not first_user_message:
+                                message = data.get('message', {})
+                                content = message.get('content', '')
+                                if isinstance(content, str):
+                                    first_user_message = content.strip()
+                                elif isinstance(content, list):
+                                    # Extract text from content blocks
+                                    for block in content:
+                                        if isinstance(block, dict) and block.get('type') == 'text':
+                                            first_user_message = block.get('text', '').strip()
+                                            break
+                                        elif isinstance(block, str):
+                                            first_user_message = block.strip()
+                                            break
 
                             if msg_type == 'assistant':
                                 message = data.get('message', {})
@@ -218,6 +236,21 @@ class SessionLoader:
             except:
                 pass
 
+        # Create description from first user message or cwd
+        description = None
+        if first_user_message:
+            # Truncate to ~100 chars, break on word boundary
+            description = first_user_message[:100]
+            if len(first_user_message) > 100:
+                description = description.rsplit(' ', 1)[0] + '...'
+            # Clean up newlines
+            description = description.replace('\n', ' ').replace('\r', '')
+        elif cwd:
+            # Use working directory if no first message
+            description = f"[{cwd}]"
+        else:
+            description = "[Empty session]"
+
         return SessionMetadata(
             session_id=session_id,
             workspace=workspace,
@@ -233,7 +266,8 @@ class SessionLoader:
             total_cache_read_tokens=total_cache_read,
             total_cache_create_tokens=total_cache_create,
             tool_usage=dict(tool_usage),
-            cwd=cwd
+            cwd=cwd,
+            description=description
         )
 
     @staticmethod
@@ -357,11 +391,11 @@ class SessionBrowser(Container):
 
         # Add columns
         table.add_column("Date", width=20)
+        table.add_column("Description", width=60)
         table.add_column("Workspace", width=25)
         table.add_column("Messages", width=10)
-        table.add_column("Tokens", width=15)
+        table.add_column("Tokens", width=12)
         table.add_column("Size", width=10)
-        table.add_column("Session ID", width=40)
 
 
 class SessionDetail(VerticalScroll):
@@ -420,12 +454,38 @@ class SessionViewerApp(App):
         padding: 1 2;
         margin: 1;
     }
+
+    #confirm-dialog {
+        background: $surface;
+        border: thick $error;
+        padding: 2 4;
+        width: 60;
+        height: auto;
+    }
+
+    #confirm-dialog Label {
+        width: 100%;
+        content-align: center middle;
+        padding: 1 0;
+    }
+
+    #confirm-dialog Horizontal {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        padding: 1 0;
+    }
+
+    #confirm-dialog Button {
+        margin: 0 1;
+    }
     """
 
     BINDINGS = [
         Binding("q", "quit", "Quit", priority=True),
         Binding("?", "help", "Help"),
         Binding("r", "refresh", "Refresh"),
+        Binding("d", "delete_session", "Delete Session"),
         Binding("enter", "view_session", "View Session"),
         Binding("ctrl+r", "resume_session", "Resume (Same Terminal)"),
         Binding("ctrl+n", "resume_new_terminal", "Resume (New Terminal)"),
@@ -477,14 +537,16 @@ class SessionViewerApp(App):
         table = self.query_one("#session-table", DataTable)
         table.clear()
 
-        # Filter sessions
-        filtered = self.sessions
+        # Filter out empty sessions and apply search filter
+        filtered = [s for s in self.sessions if s.message_count > 0]
+
         if filter_text:
             filter_lower = filter_text.lower()
             filtered = [
-                s for s in self.sessions
+                s for s in filtered
                 if filter_lower in s.session_id.lower()
                 or filter_lower in s.workspace.lower()
+                or (s.description and filter_lower in s.description.lower())
                 or (s.cwd and filter_lower in s.cwd.lower())
             ]
 
@@ -496,11 +558,11 @@ class SessionViewerApp(App):
 
             table.add_row(
                 date_str,
+                session.description or "[No description]",
                 session.workspace,
                 str(session.message_count),
                 tokens_str,
                 size_str,
-                session.session_id,
                 key=session.session_id
             )
 
@@ -517,6 +579,9 @@ class SessionViewerApp(App):
                 (s for s in self.sessions if s.session_id == session_id),
                 None
             )
+            # Auto-load conversation when row is selected
+            if self.selected_session:
+                self.action_view_session()
 
     def action_view_session(self) -> None:
         """View the selected session in detail."""
@@ -667,6 +732,66 @@ class SessionViewerApp(App):
         except Exception as e:
             self.notify(f"Error launching terminal: {e}", severity="error")
 
+    def action_delete_session(self) -> None:
+        """Delete the selected session after confirmation."""
+        if not self.selected_session:
+            self.notify("No session selected", severity="warning")
+            return
+
+        session_id = self.selected_session.session_id
+        description = self.selected_session.description or session_id[:12]
+
+        # Simple confirmation - use a callback approach
+        def confirm_delete(confirmed: bool) -> None:
+            if confirmed:
+                try:
+                    # Delete the file
+                    self.selected_session.file_path.unlink()
+                    self.notify(f"Deleted session: {description}", severity="information")
+
+                    # Reload sessions
+                    self.load_sessions()
+                    search_input = self.query_one("#search-input", Input)
+                    self.populate_table(search_input.value)
+
+                    # Clear selection
+                    self.selected_session = None
+
+                    # Go back to list
+                    tabbed = self.query_one(TabbedContent)
+                    tabbed.active = "browser"
+                except Exception as e:
+                    self.notify(f"Error deleting session: {e}", severity="error")
+
+        # Show confirmation message
+        message_count = self.selected_session.message_count
+        if message_count == 0:
+            confirm_msg = f"Delete empty session '{description}'?"
+        else:
+            confirm_msg = f"Delete session '{description}' ({message_count} messages)? This cannot be undone!"
+
+        # Use a simple approach: push a confirmation screen
+        from textual.screen import ModalScreen
+        from textual.widgets import Button, Label
+
+        class ConfirmDeleteScreen(ModalScreen):
+            """Confirmation dialog for deleting a session."""
+
+            def compose(self) -> ComposeResult:
+                with Container(id="confirm-dialog"):
+                    yield Label(confirm_msg)
+                    with Horizontal():
+                        yield Button("Delete", variant="error", id="confirm-yes")
+                        yield Button("Cancel", variant="primary", id="confirm-no")
+
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                if event.button.id == "confirm-yes":
+                    self.dismiss(True)
+                else:
+                    self.dismiss(False)
+
+        self.push_screen(ConfirmDeleteScreen(), confirm_delete)
+
     def action_back_to_list(self) -> None:
         """Go back to the session list."""
         tabbed = self.query_one(TabbedContent)
@@ -687,11 +812,12 @@ class SessionViewerApp(App):
 
 ## Navigation
 - **↑/↓** - Navigate session list
-- **Enter** - View selected session details
+- **Enter** - View selected session (auto-loads conversation)
 - **Escape** - Back to session list
 - **Tab** - Switch between tabs
 
 ## Session Actions
+- **D** - Delete selected session (with confirmation)
 - **Ctrl+R** - Resume session in current terminal (exits viewer)
 - **Ctrl+N** - Resume session in new Windows Terminal window
 
@@ -701,7 +827,12 @@ class SessionViewerApp(App):
 - **Q** - Quit application
 
 ## Search
-Type in the search box to filter sessions by ID, workspace, or directory.
+Type in the search box to filter sessions by description, ID, workspace, or directory.
+
+## Notes
+- Empty sessions (0 messages) are automatically filtered out
+- Sessions are sorted by most recent first
+- Description shows the first user message from each conversation
 
 ---
 Press Escape to close this help.
