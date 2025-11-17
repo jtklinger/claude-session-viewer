@@ -590,11 +590,15 @@ class SessionViewerApp(App):
 
     def action_toggle_selection(self) -> None:
         """Toggle selection of the current session for multi-delete."""
-        if not self.selected_session:
-            self.notify("No session selected", severity="warning")
+        table = self.query_one("#session-table", DataTable)
+
+        # Get the currently highlighted row (cursor position)
+        if table.cursor_row is None:
+            self.notify("No session highlighted", severity="warning")
             return
 
-        session_id = self.selected_session.session_id
+        # Get the session ID from the row key
+        session_id = table.cursor_row.value
 
         if session_id in self.selected_for_delete:
             self.selected_for_delete.remove(session_id)
@@ -603,12 +607,12 @@ class SessionViewerApp(App):
 
         # Refresh table to show selection indicators, keeping cursor position
         search_input = self.query_one("#search-input", Input)
+        current_row_index = table.cursor_coordinate.row
         self.populate_table(search_input.value)
 
-        # Move cursor back to the selected session
-        table = self.query_one("#session-table", DataTable)
+        # Move cursor back to the same position
         try:
-            table.move_cursor(row=table.get_row_index(session_id))
+            table.move_cursor(row=current_row_index)
         except Exception:
             # If row not found (filtered out), just stay at current position
             pass
@@ -621,8 +625,22 @@ class SessionViewerApp(App):
 
     def action_view_session(self) -> None:
         """View the selected session in detail."""
+        table = self.query_one("#session-table", DataTable)
+
+        # Get the currently highlighted row (cursor position)
+        if table.cursor_row is None:
+            self.notify("No session highlighted", severity="warning")
+            return
+
+        # Get the session ID from the row key
+        session_id = table.cursor_row.value
+        self.selected_session = next(
+            (s for s in self.sessions if s.session_id == session_id),
+            None
+        )
+
         if not self.selected_session:
-            self.notify("No session selected", severity="warning")
+            self.notify("Session not found", severity="error")
             return
 
         # Switch to detail tab
@@ -741,21 +759,31 @@ class SessionViewerApp(App):
 
     def action_resume_session(self) -> None:
         """Resume session in the current terminal."""
-        if not self.selected_session:
-            self.notify("No session selected", severity="warning")
+        table = self.query_one("#session-table", DataTable)
+
+        # Get the currently highlighted row (cursor position)
+        if table.cursor_row is None:
+            self.notify("No session highlighted", severity="warning")
             return
 
+        # Get the session ID from the row key
+        session_id = table.cursor_row.value
+
         # Exit the app and resume in the same terminal
-        self.exit(result=("resume_same", self.selected_session.session_id))
+        self.exit(result=("resume_same", session_id))
 
     def action_resume_new_terminal(self) -> None:
         """Resume session in a new Windows Terminal window."""
-        if not self.selected_session:
-            self.notify("No session selected", severity="warning")
+        table = self.query_one("#session-table", DataTable)
+
+        # Get the currently highlighted row (cursor position)
+        if table.cursor_row is None:
+            self.notify("No session highlighted", severity="warning")
             return
 
-        # Launch in new terminal
-        session_id = self.selected_session.session_id
+        # Get the session ID from the row key
+        session_id = table.cursor_row.value
+
         try:
             # For Windows Terminal
             if sys.platform == "win32":
@@ -779,12 +807,26 @@ class SessionViewerApp(App):
                 s for s in self.sessions
                 if s.session_id in self.selected_for_delete
             ]
-        elif self.selected_session:
-            # Delete only the current session
-            sessions_to_delete = [self.selected_session]
         else:
-            self.notify("No session selected", severity="warning")
-            return
+            # Delete only the currently highlighted session
+            table = self.query_one("#session-table", DataTable)
+
+            if table.cursor_row is None:
+                self.notify("No session highlighted", severity="warning")
+                return
+
+            # Get the session ID from the row key
+            session_id = table.cursor_row.value
+            current_session = next(
+                (s for s in self.sessions if s.session_id == session_id),
+                None
+            )
+
+            if not current_session:
+                self.notify("Session not found", severity="error")
+                return
+
+            sessions_to_delete = [current_session]
 
         # Build confirmation message
         count = len(sessions_to_delete)
