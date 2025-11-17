@@ -601,9 +601,17 @@ class SessionViewerApp(App):
         else:
             self.selected_for_delete.add(session_id)
 
-        # Refresh table to show selection indicators
+        # Refresh table to show selection indicators, keeping cursor position
         search_input = self.query_one("#search-input", Input)
         self.populate_table(search_input.value)
+
+        # Move cursor back to the selected session
+        table = self.query_one("#session-table", DataTable)
+        try:
+            table.move_cursor(row=table.get_row_index(session_id))
+        except Exception:
+            # If row not found (filtered out), just stay at current position
+            pass
 
         count = len(self.selected_for_delete)
         if count > 0:
