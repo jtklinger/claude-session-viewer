@@ -836,9 +836,10 @@ class SessionViewerApp(App):
                 self.notify("No session highlighted", severity="warning")
                 return
 
-            # Get the row key at cursor position (the key IS the session_id)
+            # Get the session ID from the row at cursor position
             try:
-                session_id = table.ordered_rows[table.cursor_row]
+                row = table.ordered_rows[table.cursor_row]
+                session_id = row.key.value
             except Exception as e:
                 self.notify(f"Could not get session: {e}", severity="error")
                 return
