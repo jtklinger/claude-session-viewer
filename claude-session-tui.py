@@ -586,7 +586,20 @@ class SessionViewerApp(App):
                 (s for s in self.sessions if s.session_id == session_id),
                 None
             )
-            # Don't auto-load - let user press Enter explicitly
+
+            if not self.selected_session:
+                self.notify("Session not found", severity="error")
+                return
+
+            # Load the conversation when Enter is pressed
+            tabbed = self.query_one(TabbedContent)
+            tabbed.active = "detail"
+
+            # Load and display conversation
+            self.load_conversation()
+
+            # Also update analytics
+            self.load_analytics()
 
     def action_toggle_selection(self) -> None:
         """Toggle selection of the current session for multi-delete."""
