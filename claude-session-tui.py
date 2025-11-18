@@ -601,6 +601,14 @@ class SessionViewerApp(App):
             self.load_conversation()
             self.load_analytics()
 
+            # Set focus to the conversation log to prevent keyboard events
+            # from being captured by the browser tab widgets
+            try:
+                log = self.query_one("#conversation-log", RichLog)
+                self.set_focus(log)
+            except Exception:
+                pass
+
         self.call_after_refresh(switch_and_load)
 
     def action_toggle_selection(self) -> None:
