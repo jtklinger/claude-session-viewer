@@ -524,7 +524,8 @@ class SessionViewerApp(App):
         """Called when app starts."""
         self.load_sessions()
         self.populate_table()
-        self.set_focus(self.query_one("#search-input"))
+        # Set focus to the session table so user can immediately navigate with arrow keys
+        self.set_focus(self.query_one("#session-table"))
 
     def load_sessions(self) -> None:
         """Load all sessions from disk."""
