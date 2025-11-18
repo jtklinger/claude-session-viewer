@@ -581,6 +581,12 @@ class SessionViewerApp(App):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection in the sessions table."""
         if event.data_table.id == "session-table":
+            # Check if we're on the browser tab - only proceed if we are
+            # This prevents double-handling when app-level Enter binding also fires
+            tabbed = self.query_one(TabbedContent)
+            if tabbed.active != "browser":
+                return
+
             session_id = event.row_key.value
             self.selected_session = next(
                 (s for s in self.sessions if s.session_id == session_id),
@@ -592,7 +598,6 @@ class SessionViewerApp(App):
                 return
 
             # Load the conversation when Enter is pressed
-            tabbed = self.query_one(TabbedContent)
             tabbed.active = "detail"
 
             # Load and display conversation
@@ -643,6 +648,12 @@ class SessionViewerApp(App):
 
     def action_view_session(self) -> None:
         """View the selected session in detail."""
+        # Only handle if we're on the browser tab
+        # The RowSelected event already handles the tab switch
+        tabbed = self.query_one(TabbedContent)
+        if tabbed.active != "browser":
+            return
+
         table = self.query_one("#session-table", DataTable)
 
         # Get the currently highlighted row (cursor position)
@@ -668,7 +679,6 @@ class SessionViewerApp(App):
             return
 
         # Switch to detail tab
-        tabbed = self.query_one(TabbedContent)
         tabbed.active = "detail"
 
         # Load and display conversation
