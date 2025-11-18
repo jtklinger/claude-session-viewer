@@ -487,7 +487,7 @@ class SessionViewerApp(App):
         Binding("r", "refresh", "Refresh"),
         Binding("space", "toggle_selection", "Toggle Selection"),
         Binding("d", "delete_session", "Delete Session(s)"),
-        Binding("enter", "view_session", "View Session"),
+        # Enter is handled by on_data_table_row_selected event, not app-level binding
         Binding("ctrl+r", "resume_session", "Resume (Same Terminal)"),
         Binding("ctrl+n", "resume_new_terminal", "Resume (New Terminal)"),
         Binding("escape", "back_to_list", "Back to List"),
@@ -579,34 +579,29 @@ class SessionViewerApp(App):
             self.populate_table(event.value)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Handle row selection in the sessions table."""
-        if event.data_table.id == "session-table":
-            # Check if we're on the browser tab - only proceed if we are
-            tabbed = self.query_one(TabbedContent)
-            if tabbed.active != "browser":
-                return
+        """Handle row selection in the sessions table - fires when Enter is pressed."""
+        if event.data_table.id != "session-table":
+            return
 
-            session_id = event.row_key.value
-            self.selected_session = next(
-                (s for s in self.sessions if s.session_id == session_id),
-                None
-            )
+        session_id = event.row_key.value
+        self.selected_session = next(
+            (s for s in self.sessions if s.session_id == session_id),
+            None
+        )
 
-            if not self.selected_session:
-                self.notify("Session not found", severity="error")
-                return
+        if not self.selected_session:
+            self.notify("Session not found", severity="error")
+            return
 
-            # Load the conversation when Enter is pressed
-            tabbed.active = "detail"
+        # Switch to detail tab and load conversation
+        tabbed = self.query_one(TabbedContent)
+        tabbed.active = "detail"
 
-            # Load and display conversation
-            self.load_conversation()
+        # Load and display conversation
+        self.load_conversation()
 
-            # Also update analytics
-            self.load_analytics()
-
-            # Stop event propagation to prevent app-level Enter binding from firing
-            event.stop()
+        # Also update analytics
+        self.load_analytics()
 
     def action_toggle_selection(self) -> None:
         """Toggle selection of the current session for multi-delete."""
