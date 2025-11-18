@@ -582,7 +582,6 @@ class SessionViewerApp(App):
         """Handle row selection in the sessions table."""
         if event.data_table.id == "session-table":
             # Check if we're on the browser tab - only proceed if we are
-            # This prevents double-handling when app-level Enter binding also fires
             tabbed = self.query_one(TabbedContent)
             if tabbed.active != "browser":
                 return
@@ -605,6 +604,9 @@ class SessionViewerApp(App):
 
             # Also update analytics
             self.load_analytics()
+
+            # Stop event propagation to prevent app-level Enter binding from firing
+            event.stop()
 
     def action_toggle_selection(self) -> None:
         """Toggle selection of the current session for multi-delete."""
