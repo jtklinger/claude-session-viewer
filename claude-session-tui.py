@@ -964,7 +964,8 @@ class SessionViewerApp(App):
         """Go back to the session list."""
         tabbed = self.query_one(TabbedContent)
         tabbed.active = "browser"
-        self.set_focus(self.query_one("#search-input"))
+        # Set focus back to session table for immediate navigation
+        self.set_focus(self.query_one("#session-table"))
 
     def action_refresh(self) -> None:
         """Refresh the session list."""
