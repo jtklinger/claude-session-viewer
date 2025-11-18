@@ -593,15 +593,15 @@ class SessionViewerApp(App):
             self.notify("Session not found", severity="error")
             return
 
-        # Switch to detail tab and load conversation
-        tabbed = self.query_one(TabbedContent)
-        tabbed.active = "detail"
+        # Defer tab switch and conversation loading until after event completes
+        # This prevents race conditions with Textual's event processing
+        def switch_and_load():
+            tabbed = self.query_one(TabbedContent)
+            tabbed.active = "detail"
+            self.load_conversation()
+            self.load_analytics()
 
-        # Load and display conversation
-        self.load_conversation()
-
-        # Also update analytics
-        self.load_analytics()
+        self.call_after_refresh(switch_and_load)
 
     def action_toggle_selection(self) -> None:
         """Toggle selection of the current session for multi-delete."""
