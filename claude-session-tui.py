@@ -544,12 +544,12 @@ class SessionDetail(VerticalScroll):
     """Widget showing detailed session conversation."""
 
     BINDINGS = [
-        Binding("home", "scroll_home", "Top", show=False),
-        Binding("end", "scroll_end", "Bottom", show=False),
-        Binding("pageup", "page_up", "Page Up", show=False),
-        Binding("pagedown", "page_down", "Page Down", show=False),
-        Binding("ctrl+up", "prev_message", "Previous Message", show=False),
-        Binding("ctrl+down", "next_message", "Next Message", show=False),
+        Binding("home", "scroll_home", "Home: Top", show=True),
+        Binding("end", "scroll_end", "End: Bottom", show=True),
+        Binding("pageup", "page_up", "PgUp", show=True),
+        Binding("pagedown", "page_down", "PgDn", show=True),
+        Binding("ctrl+up", "prev_message", "Ctrl+↑: Prev Msg", show=True),
+        Binding("ctrl+down", "next_message", "Ctrl+↓: Next Msg", show=True),
     ]
 
     def __init__(self, *args, **kwargs):
@@ -1047,6 +1047,9 @@ class SessionViewerApp(App):
             # Set message positions for navigation
             session_detail = self.query_one(SessionDetail)
             session_detail.set_message_positions(message_positions)
+
+            # Set focus to the text area so navigation keys work immediately
+            self.set_focus(text_area)
 
             # Show completion notification for large conversations
             if self.selected_session.message_count > 50:
