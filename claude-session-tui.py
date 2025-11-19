@@ -594,21 +594,40 @@ class SessionViewerApp(App):
             self.notify("Session not found", severity="error")
             return
 
+        # Show loading notification immediately for large conversations
+        if self.selected_session.message_count > 50:
+            self.notify(f"Loading {self.selected_session.message_count} messages...", severity="information")
+
         # Defer tab switch and conversation loading until after event completes
         # This prevents race conditions with Textual's event processing
         def switch_and_load():
             tabbed = self.query_one(TabbedContent)
             tabbed.active = "detail"
-            self.load_conversation()
-            self.load_analytics()
 
-            # Set focus to the conversation log to prevent keyboard events
-            # from being captured by the browser tab widgets
-            try:
+            # Show loading message in the log before starting the actual load
+            if self.selected_session.message_count > 50:
                 log = self.query_one("#conversation-log", RichLog)
-                self.set_focus(log)
-            except Exception:
-                pass
+                log.clear()
+                log.write("[bold yellow]Loading conversation...[/bold yellow]")
+                log.write(f"[dim]{self.selected_session.message_count} messages[/dim]")
+
+            # Defer the actual conversation loading to let the loading message display
+            def do_load():
+                self.load_conversation()
+                self.load_analytics()
+
+                # Set focus to the conversation log
+                try:
+                    log = self.query_one("#conversation-log", RichLog)
+                    self.set_focus(log)
+                except Exception:
+                    pass
+
+            # For large conversations, defer the load to show loading message first
+            if self.selected_session.message_count > 50:
+                self.call_after_refresh(do_load)
+            else:
+                do_load()
 
         self.call_after_refresh(switch_and_load)
 
@@ -699,15 +718,6 @@ class SessionViewerApp(App):
             return
 
         log = self.query_one("#conversation-log", RichLog)
-        log.clear()
-
-        # Show loading message for large conversations
-        if self.selected_session.message_count > 50:
-            log.write("[bold yellow]Loading conversation...[/bold yellow]")
-            log.write(f"[dim]{self.selected_session.message_count} messages[/dim]")
-            self.notify(f"Loading {self.selected_session.message_count} messages...", severity="information")
-
-        # Clear and show header
         log.clear()
         log.write(f"[bold cyan]Session: {self.selected_session.session_id}[/bold cyan]")
         log.write(f"[dim]Workspace: {self.selected_session.workspace}[/dim]")
