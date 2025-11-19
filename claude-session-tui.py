@@ -969,9 +969,20 @@ class SessionViewerApp(App):
 
         self.push_screen(ConfirmDeleteScreen(), confirm_delete)
 
+    def check_action_back_to_list(self) -> bool:
+        """Check if back to list action should be enabled (only when not on browser tab)."""
+        try:
+            tabbed = self.query_one(TabbedContent)
+            return tabbed.active != "browser"
+        except:
+            return False
+
     def action_back_to_list(self) -> None:
         """Go back to the session list."""
         tabbed = self.query_one(TabbedContent)
+        # Only switch if not already on browser tab
+        if tabbed.active == "browser":
+            return
         tabbed.active = "browser"
         # Set focus back to session table for immediate navigation
         self.set_focus(self.query_one("#session-table"))
