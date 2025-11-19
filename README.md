@@ -19,10 +19,12 @@ This toolkit provides two complementary tools:
 - 🔍 **Search & Filter** - Quickly find sessions by ID, workspace, or directory
 - 📊 **Session Analytics** - View token usage, tool statistics, and conversation metrics
 - 💬 **Full Conversation View** - Read entire conversations with metadata and syntax highlighting
-- 🚀 **Resume Sessions** - Launch sessions directly from the viewer (same terminal or new window)
+- 🚀 **Resume Sessions** - Launch sessions in new terminal windows with automatic directory switching
 - 🧠 **Permanent Memory** - Never forget what you discussed with Claude!
 - 📁 **Multi-Workspace Support** - Browse sessions across all your projects
-- ⌨️ **Keyboard-Driven** - Fast navigation with vim-style bindings
+- ⌨️ **Keyboard-Driven** - Fast navigation with immediate focus on session table
+- 🏷️ **Smart Descriptions** - Sessions identified by `[directory] first message` format
+- ⏳ **Loading Indicators** - Progress feedback for large conversations (>50 messages)
 
 ### Command-Line Parser (`view-claude-session.py`)
 
@@ -104,36 +106,37 @@ python claude-session-tui.py --workspace C--Users-jtkli
 
 ### Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| **↑/↓** | Navigate session list |
-| **Enter** | View selected session details |
-| **Space** | Toggle selection for multi-delete (shows ✓ indicator) |
-| **D** | Delete selected session(s) with confirmation |
-| **Ctrl+R** | Resume session in current terminal (exits TUI) |
-| **Ctrl+N** | Resume session in new Windows Terminal window |
-| **R** | Refresh session list |
-| **Tab** | Switch between tabs (Sessions/Conversation/Analytics) |
-| **Escape** | Back to session list |
-| **?** | Show help |
-| **Q** | Quit |
+| Key | Action | Availability |
+|-----|--------|--------------|
+| **↑/↓** | Navigate session list | All tabs |
+| **Enter** | View selected session details | Sessions tab |
+| **Space** | Toggle selection for multi-delete (shows ✓ indicator) | All tabs |
+| **D** | Delete selected session(s) with confirmation | All tabs |
+| **Ctrl+N** | Resume session in new Windows Terminal window | All tabs |
+| **R** | Refresh session list | Sessions tab only |
+| **Tab** | Switch between tabs (Sessions/Conversation/Analytics) | All tabs |
+| **Escape** | Back to session list | Conversation/Analytics tabs only |
+| **Q** | Quit | All tabs |
 
 ### TUI Features
 
 **Sessions Tab:**
-- Browse all your Claude sessions with descriptive summaries (shows first user message)
+- Browse all your Claude sessions with descriptive summaries showing `[directory-name] First user message...`
 - Automatically filters out empty sessions (0 messages)
 - Search by description, session ID, workspace, or directory
 - See message count, token usage, and file size at a glance
 - Sort by date (most recent first)
 - Multi-select sessions with Space bar (shows ✓ indicator)
 - Delete single or multiple sessions with confirmation (press 'D')
+- Cursor starts on session table for immediate navigation
 
 **Conversation Tab:**
 - Read full conversation history
+- Loading indicators for large conversations (>50 messages)
 - View model information and token usage per message
 - See all tool uses and results
 - Syntax highlighting for code and JSON
+- Focus automatically set to conversation view after loading
 
 **Analytics Tab:**
 - Total token usage (input/output/cache)
@@ -144,19 +147,18 @@ python claude-session-tui.py --workspace C--Users-jtkli
 ### Browsing and Resuming Sessions
 
 **Viewing Sessions:**
-- Select any session with ↑/↓ or click on it
-- Conversation automatically loads and displays
+- Navigate sessions with ↑/↓ arrow keys (cursor starts on session table)
+- Press Enter to view conversation details
+- Conversation loads with progress indicators for large sessions
+- Press Escape to return to session list (focus returns to table)
 - Switch between Sessions/Conversation/Analytics tabs to explore
 
-**Same Terminal (Ctrl+R):**
-- Select a session and press Ctrl+R
-- TUI exits and runs `claude --resume <session-id>`
-- Continue your conversation where you left off
-
-**New Terminal (Ctrl+N):**
+**Resuming Sessions (Ctrl+N):**
 - Select a session and press Ctrl+N
-- Opens new Windows Terminal tab with the resumed session
-- Keep the TUI open to browse other sessions
+- Opens new Windows Terminal tab in the session's original directory
+- Uses full path to claude executable to avoid PATH issues
+- Automatically resumes the session with `claude --resume <session-id>`
+- TUI stays open so you can continue browsing other sessions
 
 **Deleting Sessions:**
 
@@ -295,9 +297,9 @@ The interactive TUI gives Claude effectively "permanent memory" across sessions:
 # Launch the TUI
 python claude-session-tui.py
 
-# Browse your session history
+# Browse your session history with ↑/↓ arrow keys
 # Press Enter to view any past conversation
-# Press Ctrl+R to resume where you left off
+# Press Ctrl+N to resume in a new terminal window
 ```
 
 **Why this is powerful:**
@@ -306,6 +308,7 @@ python claude-session-tui.py
 - Find that perfect prompt you used before
 - Review what worked and what didn't
 - Share context between different Claude sessions
+- Sessions automatically identified by `[directory] description` format
 
 ### After System Reboot
 
@@ -382,18 +385,20 @@ This script:
 
 - **Requires Textual** - Adds a dependency (unlike the parser which is pure Python)
 - **New terminal resume on Windows only** - Ctrl+N uses `wt.exe` (Windows Terminal)
-- **Large sessions may take time to load** - Full conversation view loads all messages
+- **Large sessions may take time to load** - Full conversation view loads all messages (loading indicators shown for >50 messages)
 - **Agent sessions hidden by default** - Agent sub-task sessions don't appear in the session list (but can be viewed if you know the ID)
 
 ## Tips
 
 ### TUI Tips
 
-- **Bookmark the TUI** - Make it your go-to tool for browsing Claude sessions
-- **Use search** - Type in the search box to quickly filter sessions
+- **Keyboard-driven workflow** - Cursor starts on session table, use ↑/↓ to navigate immediately
+- **Quick identification** - Sessions show `[directory] description` format for easy recognition
+- **Use search** - Type in search box to filter by directory, description, or session ID
 - **Check analytics** - View token usage to understand API consumption
-- **Resume sessions** - Use Ctrl+R to continue old conversations
+- **Resume sessions** - Use Ctrl+N to continue old conversations in a new terminal
 - **Multi-workspace** - Browse all projects at once or filter with `--workspace`
+- **Context-aware bindings** - Footer shows only relevant shortcuts for current tab
 
 ### Parser Tips
 
