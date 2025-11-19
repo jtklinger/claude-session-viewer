@@ -899,6 +899,12 @@ class SessionViewerApp(App):
 
         # Build the conversation as plain text
         lines = []
+
+        # Show custom tag if set
+        if self.selected_session.custom_tag:
+            lines.append(f"TAG: {self.selected_session.custom_tag}")
+            lines.append("")
+
         lines.append(f"Session: {self.selected_session.session_id}")
         lines.append(f"Workspace: {self.selected_session.workspace}")
         lines.append(f"Messages: {self.selected_session.message_count}")
