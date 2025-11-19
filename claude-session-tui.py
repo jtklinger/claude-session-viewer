@@ -144,6 +144,76 @@ class SessionLoader:
         return sessions
 
     @staticmethod
+    def _find_meaningful_message(user_messages: List[str]) -> Optional[str]:
+        """
+        Find the first meaningful task/request message from a list of user messages.
+
+        Skips over:
+        - Common continuation phrases (continue, ok, yes, etc.)
+        - Very short messages (< 20 characters)
+        - Session resume indicators
+
+        Returns the first message that:
+        - Is at least 30 characters long
+        - Contains task/request indicators (action verbs, questions, etc.)
+        """
+        # Skip patterns (lowercase for case-insensitive matching)
+        skip_patterns = [
+            'continue', 'ok', 'yes', 'go ahead', 'proceed', 'sure',
+            'please continue', 'keep going', 'go on',
+            'continuing from', 'resuming', 'resume from',
+            'sounds good', 'looks good', 'perfect', 'great',
+            'done', 'finished', 'completed'
+        ]
+
+        # Task/request indicators
+        task_indicators = [
+            # Imperative verbs
+            'help', 'create', 'make', 'fix', 'add', 'update', 'change', 'modify',
+            'remove', 'delete', 'build', 'implement', 'write', 'read', 'show',
+            'display', 'check', 'test', 'review', 'analyze', 'debug', 'install',
+            'configure', 'setup', 'deploy', 'run', 'execute', 'search', 'find',
+            # Question words
+            'how', 'what', 'when', 'where', 'why', 'which', 'who',
+            'can you', 'could you', 'would you', 'will you',
+            # Request patterns
+            'i need', 'i want', 'i would like', 'please', 'let\'s'
+        ]
+
+        for message in user_messages:
+            message_lower = message.lower()
+
+            # Skip if message is too short
+            if len(message) < 20:
+                continue
+
+            # Skip if matches common skip patterns
+            if any(pattern in message_lower for pattern in skip_patterns):
+                # But only skip if the ENTIRE message is basically the skip pattern
+                # Allow messages like "ok, now let's create a function"
+                if len(message) < 50:  # Short message with skip pattern -> skip it
+                    continue
+
+            # Accept if message is substantial (30+ chars) AND contains task indicators
+            if len(message) >= 30:
+                if any(indicator in message_lower for indicator in task_indicators):
+                    return message
+                # Also accept if it's long enough and doesn't match skip patterns
+                # (fallback for messages that are clearly tasks but don't match our patterns)
+                elif len(message) >= 50:
+                    return message
+
+        # Fallback: return first non-skip message if nothing matched
+        for message in user_messages:
+            if len(message) >= 20:
+                message_lower = message.lower()
+                if not any(pattern in message_lower for pattern in skip_patterns):
+                    return message
+
+        # Last resort: return first message if we have any
+        return user_messages[0] if user_messages else None
+
+    @staticmethod
     def _extract_metadata(session_file: Path, workspace: str) -> SessionMetadata:
         """Extract metadata from a session file without loading full content."""
         session_id = session_file.stem
@@ -160,7 +230,7 @@ class SessionLoader:
         total_cache_create = 0
         tool_usage = defaultdict(int)
         cwd = None
-        first_user_message = None
+        user_messages = []  # Collect first 10 user messages for smart parsing
 
         try:
             with open(session_file, 'r', encoding='utf-8') as f:
@@ -178,21 +248,24 @@ class SessionLoader:
                                     first_timestamp = timestamp
                                 last_timestamp = timestamp
 
-                            # Extract first user message for description
-                            if msg_type == 'user' and not first_user_message:
+                            # Collect first 10 user messages for smart description parsing
+                            if msg_type == 'user' and len(user_messages) < 10:
                                 message = data.get('message', {})
                                 content = message.get('content', '')
+                                msg_text = None
                                 if isinstance(content, str):
-                                    first_user_message = content.strip()
+                                    msg_text = content.strip()
                                 elif isinstance(content, list):
                                     # Extract text from content blocks
                                     for block in content:
                                         if isinstance(block, dict) and block.get('type') == 'text':
-                                            first_user_message = block.get('text', '').strip()
+                                            msg_text = block.get('text', '').strip()
                                             break
                                         elif isinstance(block, str):
-                                            first_user_message = block.strip()
+                                            msg_text = block.strip()
                                             break
+                                if msg_text:
+                                    user_messages.append(msg_text)
 
                             if msg_type == 'assistant':
                                 message = data.get('message', {})
@@ -237,12 +310,14 @@ class SessionLoader:
             except:
                 pass
 
-        # Create description from first user message or cwd
+        # Smart description parsing: find first meaningful task/request message
         description = None
-        if first_user_message:
+        meaningful_message = SessionLoader._find_meaningful_message(user_messages)
+
+        if meaningful_message:
             # Truncate to ~80 chars for the message part
-            message_part = first_user_message[:80]
-            if len(first_user_message) > 80:
+            message_part = meaningful_message[:80]
+            if len(meaningful_message) > 80:
                 message_part = message_part.rsplit(' ', 1)[0] + '...'
             # Clean up newlines
             message_part = message_part.replace('\n', ' ').replace('\r', '')
