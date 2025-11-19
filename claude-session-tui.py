@@ -566,12 +566,16 @@ class SessionDetail(VerticalScroll):
 
     def action_scroll_home(self) -> None:
         """Scroll to the top of the conversation."""
-        self.scroll_home(animate=False)
+        text_area = self.query_one("#conversation-log", TextArea)
+        text_area.move_cursor((0, 0))
         self.current_message_index = 0
 
     def action_scroll_end(self) -> None:
         """Scroll to the bottom of the conversation."""
-        self.scroll_end(animate=False)
+        text_area = self.query_one("#conversation-log", TextArea)
+        # Move to the last line
+        last_line = len(text_area.text.split('\n')) - 1
+        text_area.move_cursor((last_line, 0))
         if self.message_positions:
             self.current_message_index = len(self.message_positions) - 1
 
@@ -590,8 +594,11 @@ class SessionDetail(VerticalScroll):
 
         if self.current_message_index > 0:
             self.current_message_index -= 1
-            target_y = self.message_positions[self.current_message_index]
-            self.scroll_to(0, target_y, animate=False)
+            # Get the TextArea and scroll it to the line number
+            text_area = self.query_one("#conversation-log", TextArea)
+            target_line = self.message_positions[self.current_message_index]
+            # Move cursor to the target line - this will scroll the view
+            text_area.move_cursor((target_line, 0))
 
     def action_next_message(self) -> None:
         """Jump to the next message."""
@@ -600,8 +607,11 @@ class SessionDetail(VerticalScroll):
 
         if self.current_message_index < len(self.message_positions) - 1:
             self.current_message_index += 1
-            target_y = self.message_positions[self.current_message_index]
-            self.scroll_to(0, target_y, animate=False)
+            # Get the TextArea and scroll it to the line number
+            text_area = self.query_one("#conversation-log", TextArea)
+            target_line = self.message_positions[self.current_message_index]
+            # Move cursor to the target line - this will scroll the view
+            text_area.move_cursor((target_line, 0))
 
     def set_message_positions(self, positions: list):
         """Set the message separator positions for navigation."""
