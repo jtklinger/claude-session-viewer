@@ -1007,6 +1007,14 @@ class SessionViewerApp(App):
         # Set focus back to session table for immediate navigation
         self.set_focus(self.query_one("#session-table"))
 
+    def check_action_refresh(self) -> bool:
+        """Check if refresh action should be enabled (only on browser tab)."""
+        try:
+            tabbed = self.query_one(TabbedContent)
+            return tabbed.active == "browser"
+        except:
+            return False
+
     def action_refresh(self) -> None:
         """Refresh the session list."""
         self.load_sessions()
