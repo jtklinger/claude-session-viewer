@@ -820,20 +820,38 @@ class SessionViewerApp(App):
 
     def action_resume_new_terminal(self) -> None:
         """Resume session in a new Windows Terminal window."""
-        table = self.query_one("#session-table", DataTable)
+        # First determine which session to resume
+        # Check if we're viewing a session in detail view, otherwise use table cursor
+        tabbed = self.query_one(TabbedContent)
 
-        # Get the currently highlighted row (cursor position)
-        if table.cursor_row is None or table.cursor_row < 0:
-            self.notify("No session highlighted", severity="warning")
-            return
+        if tabbed.active == "detail" and self.selected_session:
+            # Resume the currently viewed session
+            session = self.selected_session
+        else:
+            # Resume from table cursor position
+            table = self.query_one("#session-table", DataTable)
 
-        # Get the session ID from the row at cursor position
-        try:
-            row = table.ordered_rows[table.cursor_row]
-            session_id = row.key.value
-        except Exception as e:
-            self.notify(f"Could not get session: {e}", severity="error")
-            return
+            # Get the currently highlighted row (cursor position)
+            if table.cursor_row is None or table.cursor_row < 0:
+                self.notify("No session highlighted", severity="warning")
+                return
+
+            # Get the session ID from the row at cursor position
+            try:
+                row = table.ordered_rows[table.cursor_row]
+                session_id = row.key.value
+            except Exception as e:
+                self.notify(f"Could not get session: {e}", severity="error")
+                return
+
+            session = next(
+                (s for s in self.sessions if s.session_id == session_id),
+                None
+            )
+
+            if not session:
+                self.notify("Session not found", severity="error")
+                return
 
         try:
             # For Windows Terminal
@@ -844,10 +862,14 @@ class SessionViewerApp(App):
                     self.notify("Could not find claude executable in PATH", severity="error")
                     return
 
+                # Use the session's original working directory if available
+                start_dir = session.cwd if session.cwd else str(Path.home())
+
                 # Use full path and quote it in case of spaces
-                cmd = f'wt.exe "{claude_path}" --resume {session_id}'
+                # Start in the original working directory so Claude can find the session
+                cmd = f'wt.exe -d "{start_dir}" "{claude_path}" --resume {session.session_id}'
                 subprocess.Popen(cmd, shell=True)
-                self.notify(f"Launched session {session_id[:8]}... in new terminal", severity="information")
+                self.notify(f"Launched session {session.session_id[:8]}... in new terminal", severity="information")
             else:
                 # For other platforms, try common terminal emulators
                 self.notify("New terminal launch not implemented for this platform", severity="warning")
