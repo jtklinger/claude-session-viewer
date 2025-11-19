@@ -545,6 +545,8 @@ class SessionDetail(VerticalScroll):
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
+        # Label for displaying custom tag
+        yield Label("", id="conversation-tag")
         # Use TextArea for selectable, copyable text
         yield TextArea(id="conversation-log", read_only=True, show_line_numbers=False)
 
@@ -576,6 +578,16 @@ class SessionViewerApp(App):
 
     #session-table {
         height: 100%;
+    }
+
+    #conversation-tag {
+        dock: top;
+        width: 100%;
+        background: $accent;
+        color: $text;
+        padding: 0 2;
+        text-align: center;
+        height: auto;
     }
 
     #conversation-log {
@@ -896,15 +908,17 @@ class SessionViewerApp(App):
             return
 
         text_area = self.query_one("#conversation-log", TextArea)
+        tag_label = self.query_one("#conversation-tag", Label)
+
+        # Update tag label
+        if self.selected_session.custom_tag:
+            tag_label.update(f"🏷️  {self.selected_session.custom_tag}")
+            tag_label.display = True
+        else:
+            tag_label.display = False
 
         # Build the conversation as plain text
         lines = []
-
-        # Show custom tag if set
-        if self.selected_session.custom_tag:
-            lines.append(f"TAG: {self.selected_session.custom_tag}")
-            lines.append("")
-
         lines.append(f"Session: {self.selected_session.session_id}")
         lines.append(f"Workspace: {self.selected_session.workspace}")
         lines.append(f"Messages: {self.selected_session.message_count}")
