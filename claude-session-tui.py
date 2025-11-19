@@ -28,7 +28,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.widgets import (
     Header, Footer, DataTable, Static, Label, Tree,
-    Input, Button, TabbedContent, TabPane, Markdown, RichLog
+    Input, Button, TabbedContent, TabPane, Markdown, RichLog, TextArea
 )
 from textual.binding import Binding
 from textual.screen import Screen
@@ -412,7 +412,8 @@ class SessionDetail(VerticalScroll):
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
-        yield RichLog(id="conversation-log", wrap=True, highlight=True)
+        # Use TextArea for selectable, copyable text
+        yield TextArea(id="conversation-log", read_only=True, show_line_numbers=False)
 
 
 class SessionAnalytics(Container):
@@ -447,6 +448,10 @@ class SessionViewerApp(App):
     #conversation-log {
         height: 100%;
         border: solid $accent;
+    }
+
+    TextArea {
+        background: $surface;
     }
 
     #analytics-content {
@@ -611,12 +616,10 @@ class SessionViewerApp(App):
             tabbed = self.query_one(TabbedContent)
             tabbed.active = "detail"
 
-            # Show loading message in the log before starting the actual load
+            # Show loading message in the text area before starting the actual load
             if self.selected_session.message_count > 50:
-                log = self.query_one("#conversation-log", RichLog)
-                log.clear()
-                log.write("[bold yellow]Loading conversation...[/bold yellow]")
-                log.write(f"[dim]{self.selected_session.message_count} messages[/dim]")
+                text_area = self.query_one("#conversation-log", TextArea)
+                text_area.text = f"Loading conversation...\n{self.selected_session.message_count} messages"
 
             # Defer the actual conversation loading to let the loading message display
             def do_load():
@@ -625,8 +628,8 @@ class SessionViewerApp(App):
 
                 # Set focus to the conversation log
                 try:
-                    log = self.query_one("#conversation-log", RichLog)
-                    self.set_focus(log)
+                    text_area = self.query_one("#conversation-log", TextArea)
+                    self.set_focus(text_area)
                 except Exception:
                     pass
 
@@ -724,16 +727,18 @@ class SessionViewerApp(App):
         if not self.selected_session:
             return
 
-        log = self.query_one("#conversation-log", RichLog)
-        log.clear()
-        log.write(f"[bold cyan]Session: {self.selected_session.session_id}[/bold cyan]")
-        log.write(f"[dim]Workspace: {self.selected_session.workspace}[/dim]")
-        log.write(f"[dim]Messages: {self.selected_session.message_count}[/dim]")
+        text_area = self.query_one("#conversation-log", TextArea)
+
+        # Build the conversation as plain text
+        lines = []
+        lines.append(f"Session: {self.selected_session.session_id}")
+        lines.append(f"Workspace: {self.selected_session.workspace}")
+        lines.append(f"Messages: {self.selected_session.message_count}")
         if self.selected_session.cwd:
-            log.write(f"[dim]Directory: {self.selected_session.cwd}[/dim]")
-        log.write("")
-        log.write("[bold]" + "=" * 60 + "[/bold]")
-        log.write("")
+            lines.append(f"Directory: {self.selected_session.cwd}")
+        lines.append("")
+        lines.append("=" * 80)
+        lines.append("")
 
         # Load messages
         try:
@@ -743,11 +748,14 @@ class SessionViewerApp(App):
 
             for i, msg in enumerate(messages, 1):
                 if msg.role == 'user':
-                    log.write(f"\n[bold green]User (Message {i}):[/bold green]")
-                    log.write(msg.content)
+                    lines.append(f"\n{'=' * 80}")
+                    lines.append(f"USER (Message {i}):")
+                    lines.append(f"{'=' * 80}")
+                    lines.append(msg.content)
 
                 elif msg.role == 'assistant':
-                    log.write(f"\n[bold blue]Assistant (Message {i}):[/bold blue]")
+                    lines.append(f"\n{'=' * 80}")
+                    lines.append(f"ASSISTANT (Message {i}):")
 
                     # Show metadata
                     if msg.metadata:
@@ -764,18 +772,22 @@ class SessionViewerApp(App):
                             meta_parts.append(tokens)
 
                         if meta_parts:
-                            log.write(f"[dim italic]{' | '.join(meta_parts)}[/dim italic]")
+                            lines.append(f"{' | '.join(meta_parts)}")
 
-                    log.write(msg.content)
+                    lines.append(f"{'=' * 80}")
+                    lines.append(msg.content)
 
-                log.write("")
+                lines.append("")
+
+            # Set the text content (this is selectable and copyable)
+            text_area.text = '\n'.join(lines)
 
             # Show completion notification for large conversations
             if self.selected_session.message_count > 50:
                 self.notify(f"Loaded {len(messages)} messages", severity="information")
 
         except Exception as e:
-            log.write(f"[bold red]Error loading conversation: {e}[/bold red]")
+            text_area.text = f"Error loading conversation: {e}"
 
     def load_analytics(self) -> None:
         """Load and display analytics for the selected session."""
