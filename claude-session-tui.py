@@ -1008,18 +1008,18 @@ class SessionViewerApp(App):
                 if msg.role == 'user':
                     lines.append("")
                     lines.append("=" * 80)
-                    # Record the position of the USER line (this is where we want to jump to)
-                    message_positions.append(len(lines))
                     lines.append(f"USER (Message {i}):")
+                    # Record the position of the USER line we just added
+                    message_positions.append(len(lines) - 1)
                     lines.append("=" * 80)
                     lines.append(msg.content)
 
                 elif msg.role == 'assistant':
                     lines.append("")
                     lines.append("=" * 80)
-                    # Record the position of the ASSISTANT line (this is where we want to jump to)
-                    message_positions.append(len(lines))
                     lines.append(f"ASSISTANT (Message {i}):")
+                    # Record the position of the ASSISTANT line we just added
+                    message_positions.append(len(lines) - 1)
 
                     # Show metadata
                     if msg.metadata:
