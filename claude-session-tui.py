@@ -544,8 +544,8 @@ class SessionDetail(VerticalScroll):
     """Widget showing detailed session conversation."""
 
     BINDINGS = [
-        Binding("home", "scroll_home", "Home: Top", show=True),
-        Binding("end", "scroll_end", "End: Bottom", show=True),
+        Binding("ctrl+home", "scroll_home", "Ctrl+Home: Top", show=True),
+        Binding("ctrl+end", "scroll_end", "Ctrl+End: Bottom", show=True),
         Binding("pageup", "page_up", "PgUp", show=True),
         Binding("pagedown", "page_down", "PgDn", show=True),
         Binding("ctrl+up", "prev_message", "Ctrl+↑: Prev Msg", show=True),
@@ -1006,17 +1006,19 @@ class SessionViewerApp(App):
 
             for i, msg in enumerate(messages, 1):
                 if msg.role == 'user':
-                    lines.append(f"\n{'=' * 80}")
-                    # Record this message's position (line number)
-                    message_positions.append(len(lines) - 1)
+                    lines.append("")
+                    lines.append("=" * 80)
+                    # Record the position of the USER line (this is where we want to jump to)
+                    message_positions.append(len(lines))
                     lines.append(f"USER (Message {i}):")
-                    lines.append(f"{'=' * 80}")
+                    lines.append("=" * 80)
                     lines.append(msg.content)
 
                 elif msg.role == 'assistant':
-                    lines.append(f"\n{'=' * 80}")
-                    # Record this message's position (line number)
-                    message_positions.append(len(lines) - 1)
+                    lines.append("")
+                    lines.append("=" * 80)
+                    # Record the position of the ASSISTANT line (this is where we want to jump to)
+                    message_positions.append(len(lines))
                     lines.append(f"ASSISTANT (Message {i}):")
 
                     # Show metadata
