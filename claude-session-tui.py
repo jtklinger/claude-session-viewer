@@ -701,7 +701,14 @@ class SessionViewerApp(App):
         log = self.query_one("#conversation-log", RichLog)
         log.clear()
 
-        # Add header
+        # Show loading message for large conversations
+        if self.selected_session.message_count > 50:
+            log.write("[bold yellow]Loading conversation...[/bold yellow]")
+            log.write(f"[dim]{self.selected_session.message_count} messages[/dim]")
+            self.notify(f"Loading {self.selected_session.message_count} messages...", severity="information")
+
+        # Clear and show header
+        log.clear()
         log.write(f"[bold cyan]Session: {self.selected_session.session_id}[/bold cyan]")
         log.write(f"[dim]Workspace: {self.selected_session.workspace}[/dim]")
         log.write(f"[dim]Messages: {self.selected_session.message_count}[/dim]")
@@ -745,6 +752,10 @@ class SessionViewerApp(App):
                     log.write(msg.content)
 
                 log.write("")
+
+            # Show completion notification for large conversations
+            if self.selected_session.message_count > 50:
+                self.notify(f"Loaded {len(messages)} messages", severity="information")
 
         except Exception as e:
             log.write(f"[bold red]Error loading conversation: {e}[/bold red]")
