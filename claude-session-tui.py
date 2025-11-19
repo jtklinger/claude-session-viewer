@@ -61,7 +61,8 @@ class SessionMetadata:
     total_cache_create_tokens: int = 0
     tool_usage: Dict[str, int] = None
     cwd: Optional[str] = None
-    description: Optional[str] = None  # First user message or description
+    description: Optional[str] = None  # Auto-generated from first user message
+    custom_tag: Optional[str] = None  # User-defined custom tag/description
 
     def __post_init__(self):
         if self.tool_usage is None:
@@ -84,6 +85,42 @@ class Message:
 
 class SessionLoader:
     """Loads and parses Claude session files."""
+
+    @staticmethod
+    def _get_meta_file(session_file: Path) -> Path:
+        """Get the sidecar metadata file path for a session."""
+        return session_file.with_suffix('.meta.json')
+
+    @staticmethod
+    def _load_custom_tag(session_file: Path) -> Optional[str]:
+        """Load custom tag from sidecar metadata file if it exists."""
+        meta_file = SessionLoader._get_meta_file(session_file)
+        if meta_file.exists():
+            try:
+                with open(meta_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return data.get('custom_tag')
+            except Exception:
+                pass
+        return None
+
+    @staticmethod
+    def save_custom_tag(session_file: Path, custom_tag: Optional[str]) -> bool:
+        """Save custom tag to sidecar metadata file."""
+        meta_file = SessionLoader._get_meta_file(session_file)
+        try:
+            if custom_tag:
+                # Save tag to metadata file
+                data = {'custom_tag': custom_tag}
+                with open(meta_file, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2)
+            else:
+                # Remove metadata file if tag is empty/None
+                if meta_file.exists():
+                    meta_file.unlink()
+            return True
+        except Exception:
+            return False
 
     @staticmethod
     def get_claude_dir() -> Path:
@@ -351,6 +388,9 @@ class SessionLoader:
         else:
             description = "[Empty session]"
 
+        # Load custom tag from sidecar file if it exists
+        custom_tag = SessionLoader._load_custom_tag(session_file)
+
         return SessionMetadata(
             session_id=session_id,
             workspace=workspace,
@@ -367,7 +407,8 @@ class SessionLoader:
             total_cache_create_tokens=total_cache_create,
             tool_usage=dict(tool_usage),
             cwd=cwd,
-            description=description
+            description=description,
+            custom_tag=custom_tag
         )
 
     @staticmethod
@@ -491,7 +532,8 @@ class SessionBrowser(Container):
 
         # Add columns
         table.add_column("Date", width=20)
-        table.add_column("Description", width=60)
+        table.add_column("Tag", width=25)  # Custom user-defined tag
+        table.add_column("Description", width=45)  # Auto-generated description
         table.add_column("Workspace", width=25)
         table.add_column("Messages", width=10)
         table.add_column("Tokens", width=12)
@@ -584,11 +626,41 @@ class SessionViewerApp(App):
     #confirm-dialog Button {
         margin: 0 1;
     }
+
+    #tag-dialog {
+        background: $surface;
+        border: thick $accent;
+        padding: 2 4;
+        width: 80;
+        height: auto;
+    }
+
+    #tag-dialog Label {
+        width: 100%;
+        padding: 0 0 1 0;
+    }
+
+    #tag-dialog Input {
+        width: 100%;
+        margin: 1 0;
+    }
+
+    #tag-dialog Horizontal {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        padding: 1 0;
+    }
+
+    #tag-dialog Button {
+        margin: 0 1;
+    }
     """
 
     BINDINGS = [
         Binding("q", "quit", "Quit", priority=True),
         Binding("r", "refresh", "Refresh"),
+        Binding("t", "edit_tag", "Edit Tag"),
         Binding("space", "toggle_selection", "Toggle Selection"),
         Binding("d", "delete_session", "Delete Session(s)"),
         # Enter is handled by on_data_table_row_selected event, not app-level binding
@@ -653,6 +725,7 @@ class SessionViewerApp(App):
                 if filter_lower in s.session_id.lower()
                 or filter_lower in s.workspace.lower()
                 or (s.description and filter_lower in s.description.lower())
+                or (s.custom_tag and filter_lower in s.custom_tag.lower())
                 or (s.cwd and filter_lower in s.cwd.lower())
             ]
 
@@ -662,13 +735,17 @@ class SessionViewerApp(App):
             tokens_str = f"{session.total_input_tokens + session.total_output_tokens:,}"
             size_str = f"{session.size_bytes / 1024 / 1024:.1f} MB"
 
-            # Add selection indicator
+            # Custom tag (user-defined)
+            tag = session.custom_tag or ""
+
+            # Auto-generated description with selection indicator
             description = session.description or "[No description]"
             if session.session_id in self.selected_for_delete:
                 description = f"[✓] {description}"
 
             table.add_row(
                 date_str,
+                tag,
                 description,
                 session.workspace,
                 str(session.message_count),
@@ -1132,6 +1209,86 @@ class SessionViewerApp(App):
         search_input = self.query_one("#search-input", Input)
         self.populate_table(search_input.value)
         self.notify("Sessions refreshed", severity="information")
+
+    def action_edit_tag(self) -> None:
+        """Edit the custom tag for the highlighted session."""
+        table = self.query_one("#session-table", DataTable)
+
+        # Get the currently highlighted row
+        if table.cursor_row is None or table.cursor_row < 0:
+            self.notify("No session highlighted", severity="warning")
+            return
+
+        # Get the session ID from the row at cursor position
+        try:
+            row = table.ordered_rows[table.cursor_row]
+            session_id = row.key.value
+        except Exception as e:
+            self.notify(f"Could not get session: {e}", severity="error")
+            return
+
+        session = next(
+            (s for s in self.sessions if s.session_id == session_id),
+            None
+        )
+
+        if not session:
+            self.notify("Session not found", severity="error")
+            return
+
+        # Show tag input screen
+        from textual.screen import ModalScreen
+        from textual.widgets import Label
+
+        class TagInputScreen(ModalScreen):
+            """Modal screen for editing session tag."""
+
+            def compose(self) -> ComposeResult:
+                with Container(id="tag-dialog"):
+                    yield Label(f"Edit tag for: {session.description[:50] if session.description else session.session_id[:12]}...")
+                    yield Input(placeholder="Enter custom tag (leave empty to remove)", id="tag-input", value=session.custom_tag or "")
+                    with Horizontal():
+                        yield Button("Save", variant="primary", id="save-tag")
+                        yield Button("Cancel", variant="default", id="cancel-tag")
+
+            def on_mount(self) -> None:
+                """Focus the input when mounted."""
+                self.query_one("#tag-input", Input).focus()
+
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                if event.button.id == "save-tag":
+                    tag_input = self.query_one("#tag-input", Input)
+                    self.dismiss(tag_input.value.strip() or None)
+                else:
+                    self.dismiss(False)
+
+        def handle_tag_result(result):
+            """Handle the tag input result."""
+            if result is False:
+                # User cancelled
+                return
+
+            # Save the tag
+            if SessionLoader.save_custom_tag(session.file_path, result):
+                # Update the session object
+                session.custom_tag = result
+                # Refresh the table
+                search_input = self.query_one("#search-input", Input)
+                current_row_index = table.cursor_coordinate.row
+                self.populate_table(search_input.value)
+                # Restore cursor position
+                try:
+                    table.move_cursor(row=current_row_index)
+                except Exception:
+                    pass
+                if result:
+                    self.notify(f"Tag saved: {result}", severity="information")
+                else:
+                    self.notify("Tag removed", severity="information")
+            else:
+                self.notify("Failed to save tag", severity="error")
+
+        self.push_screen(TagInputScreen(), handle_tag_result)
 
     def action_help(self) -> None:
         """Show help information."""
