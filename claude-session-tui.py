@@ -548,7 +548,14 @@ class SessionDetail(VerticalScroll):
         Binding("end", "scroll_end", "Bottom", show=False),
         Binding("pageup", "page_up", "Page Up", show=False),
         Binding("pagedown", "page_down", "Page Down", show=False),
+        Binding("ctrl+up", "prev_message", "Previous Message", show=False),
+        Binding("ctrl+down", "next_message", "Next Message", show=False),
     ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.message_positions = []  # List of y-positions for each message separator
+        self.current_message_index = 0
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -560,10 +567,13 @@ class SessionDetail(VerticalScroll):
     def action_scroll_home(self) -> None:
         """Scroll to the top of the conversation."""
         self.scroll_home(animate=False)
+        self.current_message_index = 0
 
     def action_scroll_end(self) -> None:
         """Scroll to the bottom of the conversation."""
         self.scroll_end(animate=False)
+        if self.message_positions:
+            self.current_message_index = len(self.message_positions) - 1
 
     def action_page_up(self) -> None:
         """Scroll up one page."""
@@ -572,6 +582,31 @@ class SessionDetail(VerticalScroll):
     def action_page_down(self) -> None:
         """Scroll down one page."""
         self.scroll_page_down()
+
+    def action_prev_message(self) -> None:
+        """Jump to the previous message."""
+        if not self.message_positions:
+            return
+
+        if self.current_message_index > 0:
+            self.current_message_index -= 1
+            target_y = self.message_positions[self.current_message_index]
+            self.scroll_to(0, target_y, animate=False)
+
+    def action_next_message(self) -> None:
+        """Jump to the next message."""
+        if not self.message_positions:
+            return
+
+        if self.current_message_index < len(self.message_positions) - 1:
+            self.current_message_index += 1
+            target_y = self.message_positions[self.current_message_index]
+            self.scroll_to(0, target_y, animate=False)
+
+    def set_message_positions(self, positions: list):
+        """Set the message separator positions for navigation."""
+        self.message_positions = positions
+        self.current_message_index = 0
 
 
 class SessionAnalytics(Container):
@@ -942,6 +977,8 @@ class SessionViewerApp(App):
 
         # Build the conversation as plain text
         lines = []
+        message_positions = []  # Track line numbers where messages start
+
         lines.append(f"Session: {self.selected_session.session_id}")
         lines.append(f"Workspace: {self.selected_session.workspace}")
         lines.append(f"Messages: {self.selected_session.message_count}")
@@ -960,12 +997,16 @@ class SessionViewerApp(App):
             for i, msg in enumerate(messages, 1):
                 if msg.role == 'user':
                     lines.append(f"\n{'=' * 80}")
+                    # Record this message's position (line number)
+                    message_positions.append(len(lines) - 1)
                     lines.append(f"USER (Message {i}):")
                     lines.append(f"{'=' * 80}")
                     lines.append(msg.content)
 
                 elif msg.role == 'assistant':
                     lines.append(f"\n{'=' * 80}")
+                    # Record this message's position (line number)
+                    message_positions.append(len(lines) - 1)
                     lines.append(f"ASSISTANT (Message {i}):")
 
                     # Show metadata
@@ -992,6 +1033,10 @@ class SessionViewerApp(App):
 
             # Set the text content (this is selectable and copyable)
             text_area.text = '\n'.join(lines)
+
+            # Set message positions for navigation
+            session_detail = self.query_one(SessionDetail)
+            session_detail.set_message_positions(message_positions)
 
             # Show completion notification for large conversations
             if self.selected_session.message_count > 50:
