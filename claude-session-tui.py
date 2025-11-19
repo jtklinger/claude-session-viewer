@@ -159,11 +159,17 @@ class SessionLoader:
         """
         # Skip patterns (lowercase for case-insensitive matching)
         skip_patterns = [
+            # Continuation phrases
             'continue', 'ok', 'yes', 'go ahead', 'proceed', 'sure',
             'please continue', 'keep going', 'go on',
             'continuing from', 'resuming', 'resume from',
             'sounds good', 'looks good', 'perfect', 'great',
-            'done', 'finished', 'completed'
+            'done', 'finished', 'completed',
+            # System/automated messages
+            'caveat:', 'the messages below were generated',
+            '<command-name>', '<local-command-stdout>', '<command-message>',
+            'context usage', 'mcp tools', 'memory files',
+            '/context', '/model', 'set model to'
         ]
 
         # Task/request indicators
@@ -182,9 +188,19 @@ class SessionLoader:
 
         for message in user_messages:
             message_lower = message.lower()
+            message_start = message_lower[:100]  # Check first 100 chars for system patterns
 
             # Skip if message is too short
             if len(message) < 20:
+                continue
+
+            # Always skip system/automated messages (check beginning of message)
+            system_skip = [
+                'caveat:', '<command-name>', '<local-command-stdout>',
+                'the messages below were generated', 'context usage',
+                '/context', '/model', 'set model to'
+            ]
+            if any(pattern in message_start for pattern in system_skip):
                 continue
 
             # Skip if matches common skip patterns
