@@ -543,12 +543,42 @@ class SessionBrowser(Container):
 class SessionDetail(VerticalScroll):
     """Widget showing detailed session conversation."""
 
+    BINDINGS = [
+        Binding("home", "scroll_home", "Top", show=False),
+        Binding("end", "scroll_end", "Bottom", show=False),
+        Binding("pageup", "page_up", "Page Up", show=False),
+        Binding("pagedown", "page_down", "Page Down", show=False),
+    ]
+
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         # Label for displaying custom tag
         yield Label("", id="conversation-tag")
         # Use TextArea for selectable, copyable text
         yield TextArea(id="conversation-log", read_only=True, show_line_numbers=False)
+
+    def action_scroll_home(self) -> None:
+        """Scroll to the top of the conversation."""
+        text_area = self.query_one("#conversation-log", TextArea)
+        text_area.move_cursor((0, 0))
+        text_area.scroll_home()
+
+    def action_scroll_end(self) -> None:
+        """Scroll to the bottom of the conversation."""
+        text_area = self.query_one("#conversation-log", TextArea)
+        # Move cursor to end of document
+        text_area.move_cursor((len(text_area.text.splitlines()), 0))
+        text_area.scroll_end()
+
+    def action_page_up(self) -> None:
+        """Scroll up one page."""
+        text_area = self.query_one("#conversation-log", TextArea)
+        text_area.action_page_up()
+
+    def action_page_down(self) -> None:
+        """Scroll down one page."""
+        text_area = self.query_one("#conversation-log", TextArea)
+        text_area.action_page_down()
 
 
 class SessionAnalytics(Container):
