@@ -1375,6 +1375,21 @@ class SessionViewerApp(App):
             if SessionLoader.save_custom_tag(session.file_path, result):
                 # Update the session object
                 session.custom_tag = result
+
+                # Update the selected session if we're viewing it
+                if self.selected_session and self.selected_session.session_id == session.session_id:
+                    self.selected_session.custom_tag = result
+                    # Update the tag label in conversation view if visible
+                    try:
+                        tag_label = self.query_one("#conversation-tag", Label)
+                        if result:
+                            tag_label.update(f"🏷️  {result}")
+                            tag_label.display = True
+                        else:
+                            tag_label.display = False
+                    except Exception:
+                        pass
+
                 # Refresh the table
                 search_input = self.query_one("#search-input", Input)
                 current_row_index = table.cursor_coordinate.row
