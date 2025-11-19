@@ -16,6 +16,7 @@ Usage:
 import json
 import sys
 import subprocess
+import shutil
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -837,7 +838,14 @@ class SessionViewerApp(App):
         try:
             # For Windows Terminal
             if sys.platform == "win32":
-                cmd = f'wt.exe claude --resume {session_id}'
+                # Find the full path to claude to avoid PATH issues in new terminal
+                claude_path = shutil.which('claude')
+                if not claude_path:
+                    self.notify("Could not find claude executable in PATH", severity="error")
+                    return
+
+                # Use full path and quote it in case of spaces
+                cmd = f'wt.exe "{claude_path}" --resume {session_id}'
                 subprocess.Popen(cmd, shell=True)
                 self.notify(f"Launched session {session_id[:8]}... in new terminal", severity="information")
             else:
