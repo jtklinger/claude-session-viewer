@@ -484,7 +484,6 @@ class SessionViewerApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit", priority=True),
-        Binding("?", "help", "Help"),
         Binding("r", "refresh", "Refresh"),
         Binding("space", "toggle_selection", "Toggle Selection"),
         Binding("d", "delete_session", "Delete Session(s)"),
