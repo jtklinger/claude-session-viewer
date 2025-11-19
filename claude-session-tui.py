@@ -240,12 +240,20 @@ class SessionLoader:
         # Create description from first user message or cwd
         description = None
         if first_user_message:
-            # Truncate to ~100 chars, break on word boundary
-            description = first_user_message[:100]
-            if len(first_user_message) > 100:
-                description = description.rsplit(' ', 1)[0] + '...'
+            # Truncate to ~80 chars for the message part
+            message_part = first_user_message[:80]
+            if len(first_user_message) > 80:
+                message_part = message_part.rsplit(' ', 1)[0] + '...'
             # Clean up newlines
-            description = description.replace('\n', ' ').replace('\r', '')
+            message_part = message_part.replace('\n', ' ').replace('\r', '')
+
+            # Prepend directory name if available for better context
+            if cwd:
+                # Get just the directory name (last part of path)
+                dir_name = Path(cwd).name
+                description = f"[{dir_name}] {message_part}"
+            else:
+                description = message_part
         elif cwd:
             # Use working directory if no first message
             description = f"[{cwd}]"
