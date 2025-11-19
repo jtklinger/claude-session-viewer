@@ -559,26 +559,19 @@ class SessionDetail(VerticalScroll):
 
     def action_scroll_home(self) -> None:
         """Scroll to the top of the conversation."""
-        text_area = self.query_one("#conversation-log", TextArea)
-        text_area.move_cursor((0, 0))
-        text_area.scroll_home()
+        self.scroll_home(animate=False)
 
     def action_scroll_end(self) -> None:
         """Scroll to the bottom of the conversation."""
-        text_area = self.query_one("#conversation-log", TextArea)
-        # Move cursor to end of document
-        text_area.move_cursor((len(text_area.text.splitlines()), 0))
-        text_area.scroll_end()
+        self.scroll_end(animate=False)
 
     def action_page_up(self) -> None:
         """Scroll up one page."""
-        text_area = self.query_one("#conversation-log", TextArea)
-        text_area.action_page_up()
+        self.scroll_page_up()
 
     def action_page_down(self) -> None:
         """Scroll down one page."""
-        text_area = self.query_one("#conversation-log", TextArea)
-        text_area.action_page_down()
+        self.scroll_page_down()
 
 
 class SessionAnalytics(Container):
