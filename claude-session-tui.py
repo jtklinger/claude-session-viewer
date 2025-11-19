@@ -489,8 +489,7 @@ class SessionViewerApp(App):
         Binding("space", "toggle_selection", "Toggle Selection"),
         Binding("d", "delete_session", "Delete Session(s)"),
         # Enter is handled by on_data_table_row_selected event, not app-level binding
-        Binding("ctrl+r", "resume_session", "Resume (Same Terminal)"),
-        Binding("ctrl+n", "resume_new_terminal", "Resume (New Terminal)"),
+        Binding("ctrl+n", "resume_new_terminal", "Resume Session"),
         Binding("escape", "back_to_list", "Back to List"),
     ]
 
@@ -798,26 +797,6 @@ class SessionViewerApp(App):
 
         container.update("\n".join(lines))
 
-    def action_resume_session(self) -> None:
-        """Resume session in the current terminal."""
-        table = self.query_one("#session-table", DataTable)
-
-        # Get the currently highlighted row (cursor position)
-        if table.cursor_row is None or table.cursor_row < 0:
-            self.notify("No session highlighted", severity="warning")
-            return
-
-        # Get the session ID from the row at cursor position
-        try:
-            row = table.ordered_rows[table.cursor_row]
-            session_id = row.key.value
-        except Exception as e:
-            self.notify(f"Could not get session: {e}", severity="error")
-            return
-
-        # Exit the app and resume in the same terminal
-        self.exit(result=("resume_same", session_id))
-
     def action_resume_new_terminal(self) -> None:
         """Resume session in a new Windows Terminal window."""
         # First determine which session to resume
@@ -1018,7 +997,6 @@ class SessionViewerApp(App):
 ## Session Actions
 - **Space** - Toggle selection for multi-delete (shows ✓ indicator)
 - **D** - Delete selected session(s) (with confirmation)
-- **Ctrl+R** - Resume session in current terminal (exits viewer)
 - **Ctrl+N** - Resume session in new Windows Terminal window
 
 ## General
@@ -1063,8 +1041,9 @@ Examples:
 
 Keyboard Shortcuts:
   Enter       - View session details
-  Ctrl+R      - Resume session in current terminal
   Ctrl+N      - Resume session in new terminal
+  Space       - Toggle selection for multi-delete
+  D           - Delete selected session(s)
   R           - Refresh session list
   Q           - Quit
   ?           - Help
@@ -1076,16 +1055,7 @@ Keyboard Shortcuts:
 
     # Run the app
     app = SessionViewerApp(workspace=args.workspace)
-    result = app.run()
-
-    # Handle resume action
-    if result and isinstance(result, tuple):
-        action, session_id = result
-        if action == "resume_same":
-            # Resume in current terminal
-            print(f"\nResuming session {session_id}...")
-            import os
-            os.execlp("claude", "claude", "--resume", session_id)
+    app.run()
 
 
 if __name__ == '__main__':
