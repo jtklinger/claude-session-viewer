@@ -544,6 +544,56 @@ class SessionLoader:
         else:
             return str(content)
 
+    @staticmethod
+    def search_session_content(session_file: Path, search_term: str) -> bool:
+        """
+        Search the full content of a session file for a search term.
+        Returns True if the term is found in any message.
+        """
+        search_lower = search_term.lower()
+        try:
+            with open(session_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    try:
+                        data = json.loads(line)
+                        msg_type = data.get('type')
+
+                        if msg_type in ['user', 'assistant']:
+                            message = data.get('message', {})
+                            content = message.get('content', '')
+
+                            # Handle string content
+                            if isinstance(content, str):
+                                if search_lower in content.lower():
+                                    return True
+                            # Handle list content (blocks)
+                            elif isinstance(content, list):
+                                for block in content:
+                                    if isinstance(block, dict):
+                                        # Check text blocks
+                                        if block.get('type') == 'text':
+                                            text = block.get('text', '')
+                                            if search_lower in text.lower():
+                                                return True
+                                        # Check thinking blocks
+                                        elif block.get('type') == 'thinking':
+                                            thinking = block.get('thinking', '')
+                                            if search_lower in thinking.lower():
+                                                return True
+                                        # Check tool use
+                                        elif block.get('type') == 'tool_use':
+                                            tool_input = json.dumps(block.get('input', {}))
+                                            if search_lower in tool_input.lower():
+                                                return True
+                                    elif isinstance(block, str):
+                                        if search_lower in block.lower():
+                                            return True
+                    except (json.JSONDecodeError, Exception):
+                        continue
+        except Exception:
+            pass
+        return False
+
 
 # ============================================================================
 # TEXTUAL WIDGETS
@@ -554,7 +604,8 @@ class SessionBrowser(Container):
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
-        yield Input(placeholder="Search sessions...", id="search-input")
+        with Horizontal(id="search-bar"):
+            yield Input(placeholder="Search sessions (prefix with // for deep search)...", id="search-input")
         yield DataTable(id="session-table")
 
     def on_mount(self) -> None:
@@ -672,9 +723,14 @@ class SessionViewerApp(App):
         layers: base overlay;
     }
 
-    #search-input {
+    #search-bar {
         dock: top;
+        height: auto;
         margin: 1;
+    }
+
+    #search-input {
+        width: 100%;
     }
 
     #session-table {
@@ -824,7 +880,7 @@ class SessionViewerApp(App):
             self.notify(f"Error loading sessions: {e}", severity="error")
             self.sessions = []
 
-    def populate_table(self, filter_text: str = "") -> None:
+    def populate_table(self, filter_text: str = "", deep_search: bool = False) -> None:
         """Populate the sessions table."""
         table = self.query_one("#session-table", DataTable)
         table.clear()
@@ -833,15 +889,44 @@ class SessionViewerApp(App):
         filtered = [s for s in self.sessions if s.message_count > 0]
 
         if filter_text:
-            filter_lower = filter_text.lower()
-            filtered = [
-                s for s in filtered
-                if filter_lower in s.session_id.lower()
-                or filter_lower in s.workspace.lower()
-                or (s.description and filter_lower in s.description.lower())
-                or (s.custom_tag and filter_lower in s.custom_tag.lower())
-                or (s.cwd and filter_lower in s.cwd.lower())
-            ]
+            # Check for deep search prefix
+            if filter_text.startswith("//"):
+                deep_search = True
+                filter_text = filter_text[2:].strip()
+                if not filter_text:
+                    # Just "//" with no search term - show all
+                    deep_search = False
+
+            if filter_text:
+                filter_lower = filter_text.lower()
+
+                if deep_search:
+                    # Deep search: search full conversation content
+                    self.notify(f"Deep searching for '{filter_text}'...", severity="information")
+                    deep_results = []
+                    for s in filtered:
+                        # First check quick fields
+                        if (filter_lower in s.session_id.lower()
+                            or filter_lower in s.workspace.lower()
+                            or (s.description and filter_lower in s.description.lower())
+                            or (s.custom_tag and filter_lower in s.custom_tag.lower())
+                            or (s.cwd and filter_lower in s.cwd.lower())):
+                            deep_results.append(s)
+                        # Then do deep content search
+                        elif SessionLoader.search_session_content(s.file_path, filter_text):
+                            deep_results.append(s)
+                    filtered = deep_results
+                    self.notify(f"Found {len(filtered)} sessions", severity="information")
+                else:
+                    # Quick search: only search metadata fields
+                    filtered = [
+                        s for s in filtered
+                        if filter_lower in s.session_id.lower()
+                        or filter_lower in s.workspace.lower()
+                        or (s.description and filter_lower in s.description.lower())
+                        or (s.custom_tag and filter_lower in s.custom_tag.lower())
+                        or (s.cwd and filter_lower in s.cwd.lower())
+                    ]
 
         # Add rows
         for session in filtered:
@@ -1471,6 +1556,10 @@ class SessionViewerApp(App):
 
 ## Search
 Type in the search box to filter sessions by description, ID, workspace, or directory.
+
+**Deep Search:** Prefix your search with `//` to search the full conversation content.
+- Example: `//incremental` searches all message text for "incremental"
+- Deep search is slower but finds text anywhere in conversations
 
 ## Notes
 - Empty sessions (0 messages) are automatically filtered out
