@@ -634,17 +634,25 @@ class SessionDetail(VerticalScroll):
         Binding("pagedown", "page_down", "PgDn", show=True),
         Binding("ctrl+up", "prev_message", "Ctrl+↑: Prev Msg", show=True),
         Binding("ctrl+down", "next_message", "Ctrl+↓: Next Msg", show=True),
+        Binding("slash", "start_search", "/: Search", show=True),
+        Binding("n", "find_next", "n: Next", show=True),
+        Binding("shift+n", "find_prev", "N: Prev", show=True),
     ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.message_positions = []  # List of y-positions for each message separator
         self.current_message_index = 0
+        self.search_term = ""
+        self.search_matches = []  # List of (line, col) positions
+        self.current_match_index = -1
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         # Label for displaying custom tag
         yield Label("", id="conversation-tag")
+        # Search input (hidden by default)
+        yield Input(placeholder="Search in conversation...", id="conversation-search")
         # Use TextArea for selectable, copyable text
         yield TextArea(id="conversation-log", read_only=True, show_line_numbers=False)
 
@@ -702,6 +710,104 @@ class SessionDetail(VerticalScroll):
         self.message_positions = positions
         self.current_message_index = 0
 
+    def on_mount(self) -> None:
+        """Hide search input on mount."""
+        search_input = self.query_one("#conversation-search", Input)
+        search_input.display = False
+
+    def action_start_search(self) -> None:
+        """Show the search input."""
+        search_input = self.query_one("#conversation-search", Input)
+        search_input.display = True
+        search_input.value = ""
+        search_input.focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle search submission."""
+        if event.input.id == "conversation-search":
+            self.perform_search(event.value)
+            # Hide search input and return focus to text area
+            event.input.display = False
+            text_area = self.query_one("#conversation-log", TextArea)
+            self.app.set_focus(text_area)
+
+    def on_key(self, event) -> None:
+        """Handle key events for search input."""
+        search_input = self.query_one("#conversation-search", Input)
+        if search_input.display and event.key == "escape":
+            # Cancel search and hide input
+            search_input.display = False
+            text_area = self.query_one("#conversation-log", TextArea)
+            self.app.set_focus(text_area)
+            event.stop()
+
+    def perform_search(self, search_term: str) -> None:
+        """Search for term in conversation and jump to first match."""
+        if not search_term:
+            return
+
+        self.search_term = search_term.lower()
+        self.search_matches = []
+        self.current_match_index = -1
+
+        text_area = self.query_one("#conversation-log", TextArea)
+        lines = text_area.text.split('\n')
+
+        # Find all matches
+        for line_num, line in enumerate(lines):
+            line_lower = line.lower()
+            col = 0
+            while True:
+                pos = line_lower.find(self.search_term, col)
+                if pos == -1:
+                    break
+                self.search_matches.append((line_num, pos))
+                col = pos + 1
+
+        if self.search_matches:
+            self.current_match_index = 0
+            self.go_to_match(0)
+            self.app.notify(f"Found {len(self.search_matches)} matches", severity="information")
+        else:
+            self.app.notify(f"No matches for '{search_term}'", severity="warning")
+
+    def go_to_match(self, index: int) -> None:
+        """Jump to a specific match."""
+        if not self.search_matches or index < 0 or index >= len(self.search_matches):
+            return
+
+        line, col = self.search_matches[index]
+        text_area = self.query_one("#conversation-log", TextArea)
+        text_area.move_cursor((line, col))
+
+    def action_find_next(self) -> None:
+        """Jump to next search match."""
+        if not self.search_matches:
+            if self.search_term:
+                self.app.notify("No matches", severity="warning")
+            return
+
+        self.current_match_index = (self.current_match_index + 1) % len(self.search_matches)
+        self.go_to_match(self.current_match_index)
+        self.app.notify(f"Match {self.current_match_index + 1}/{len(self.search_matches)}", severity="information")
+
+    def action_find_prev(self) -> None:
+        """Jump to previous search match."""
+        if not self.search_matches:
+            if self.search_term:
+                self.app.notify("No matches", severity="warning")
+            return
+
+        self.current_match_index = (self.current_match_index - 1) % len(self.search_matches)
+        self.go_to_match(self.current_match_index)
+        self.app.notify(f"Match {self.current_match_index + 1}/{len(self.search_matches)}", severity="information")
+
+    def clear_search(self) -> None:
+        """Clear search state."""
+        self.search_term = ""
+        self.search_matches = []
+        self.current_match_index = -1
+
 
 class SessionAnalytics(Container):
     """Widget showing session analytics and statistics."""
@@ -745,6 +851,14 @@ class SessionViewerApp(App):
         padding: 0 2;
         text-align: center;
         height: auto;
+    }
+
+    #conversation-search {
+        dock: top;
+        width: 100%;
+        margin: 0 0 1 0;
+        background: $surface;
+        border: solid $warning;
     }
 
     #conversation-log {
@@ -1554,12 +1668,20 @@ class SessionViewerApp(App):
 3. Press **D** to delete all selected sessions at once
 4. Or just press **D** on a single session without Space
 
-## Search
+## Session List Search
 Type in the search box to filter sessions by description, ID, workspace, or directory.
 
 **Deep Search:** Prefix your search with `//` to search the full conversation content.
 - Example: `//incremental` searches all message text for "incremental"
 - Deep search is slower but finds text anywhere in conversations
+
+## Conversation View Search
+When viewing a conversation:
+- **/** - Open search box
+- **Enter** - Search and jump to first match
+- **n** - Jump to next match
+- **N** (Shift+n) - Jump to previous match
+- **Escape** - Cancel search
 
 ## Notes
 - Empty sessions (0 messages) are automatically filtered out
