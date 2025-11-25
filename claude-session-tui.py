@@ -142,39 +142,72 @@ class SessionLoader:
         return [d.name for d in projects_base.iterdir() if d.is_dir()]
 
     @staticmethod
-    def list_sessions(workspace: Optional[str] = None) -> List[SessionMetadata]:
-        """List all sessions, optionally filtered by workspace."""
-        claude_dir = SessionLoader.get_claude_dir()
-        projects_base = claude_dir / "projects"
-
-        if not projects_base.exists():
-            return []
-
+    def list_sessions(workspace: Optional[str] = None, custom_paths: Optional[List[Path]] = None) -> List[SessionMetadata]:
+        """List all sessions, optionally filtered by workspace or from custom paths."""
         sessions = []
 
-        # Determine which workspaces to scan
-        if workspace:
-            workspaces = [workspace]
+        # If custom paths are provided, scan those instead of the default location
+        if custom_paths:
+            for custom_path in custom_paths:
+                if not custom_path.exists():
+                    continue
+
+                # If it's a directory, scan for .jsonl files recursively
+                if custom_path.is_dir():
+                    for session_file in custom_path.rglob("*.jsonl"):
+                        # Skip history.jsonl and other non-session files
+                        if session_file.name == "history.jsonl":
+                            continue
+                        # Skip agent sessions by default
+                        if session_file.stem.startswith("agent-"):
+                            continue
+
+                        try:
+                            # Use parent directory name as workspace
+                            ws = session_file.parent.name
+                            metadata = SessionLoader._extract_metadata(session_file, ws)
+                            sessions.append(metadata)
+                        except Exception:
+                            continue
+                # If it's a file, try to load it directly
+                elif custom_path.is_file() and custom_path.suffix == ".jsonl":
+                    try:
+                        ws = custom_path.parent.name
+                        metadata = SessionLoader._extract_metadata(custom_path, ws)
+                        sessions.append(metadata)
+                    except Exception:
+                        pass
         else:
-            workspaces = [d.name for d in projects_base.iterdir() if d.is_dir()]
+            # Default behavior: scan ~/.claude/projects/
+            claude_dir = SessionLoader.get_claude_dir()
+            projects_base = claude_dir / "projects"
 
-        for ws in workspaces:
-            ws_dir = projects_base / ws
-            if not ws_dir.exists():
-                continue
+            if not projects_base.exists():
+                return []
 
-            # Find all .jsonl files (excluding agent sessions by default)
-            for session_file in ws_dir.glob("*.jsonl"):
-                # Skip agent sessions in list view (can still be viewed if opened directly)
-                if session_file.stem.startswith("agent-"):
+            # Determine which workspaces to scan
+            if workspace:
+                workspaces = [workspace]
+            else:
+                workspaces = [d.name for d in projects_base.iterdir() if d.is_dir()]
+
+            for ws in workspaces:
+                ws_dir = projects_base / ws
+                if not ws_dir.exists():
                     continue
 
-                try:
-                    metadata = SessionLoader._extract_metadata(session_file, ws)
-                    sessions.append(metadata)
-                except Exception:
-                    # Skip corrupted sessions
-                    continue
+                # Find all .jsonl files (excluding agent sessions by default)
+                for session_file in ws_dir.glob("*.jsonl"):
+                    # Skip agent sessions in list view (can still be viewed if opened directly)
+                    if session_file.stem.startswith("agent-"):
+                        continue
+
+                    try:
+                        metadata = SessionLoader._extract_metadata(session_file, ws)
+                        sessions.append(metadata)
+                    except Exception:
+                        # Skip corrupted sessions
+                        continue
 
         # Sort by modification time, most recent first
         sessions.sort(key=lambda s: s.modified, reverse=True)
@@ -750,10 +783,11 @@ class SessionViewerApp(App):
 
     TITLE = "Claude Session Viewer"
 
-    def __init__(self, workspace: Optional[str] = None):
+    def __init__(self, workspace: Optional[str] = None, custom_paths: Optional[List[Path]] = None):
         """Initialize the app."""
         super().__init__()
         self.workspace_filter = workspace
+        self.custom_paths = custom_paths
         self.sessions: List[SessionMetadata] = []
         self.selected_session: Optional[SessionMetadata] = None
         self.selected_for_delete: set = set()  # Track multi-selected sessions
@@ -785,7 +819,7 @@ class SessionViewerApp(App):
     def load_sessions(self) -> None:
         """Load all sessions from disk."""
         try:
-            self.sessions = SessionLoader.list_sessions(self.workspace_filter)
+            self.sessions = SessionLoader.list_sessions(self.workspace_filter, self.custom_paths)
         except Exception as e:
             self.notify(f"Error loading sessions: {e}", severity="error")
             self.sessions = []
@@ -1463,6 +1497,8 @@ def main():
 Examples:
   python claude-session-tui.py                     # Show all sessions from all workspaces
   python claude-session-tui.py --workspace NAME    # Show sessions from specific workspace
+  python claude-session-tui.py --path /custom/dir  # Scan custom directory for sessions
+  python claude-session-tui.py --path /dir1 --path /dir2  # Scan multiple directories
 
 Keyboard Shortcuts:
   Enter       - View session details
@@ -1476,10 +1512,12 @@ Keyboard Shortcuts:
     )
 
     parser.add_argument('--workspace', '-w', help='Filter to specific workspace')
+    parser.add_argument('--path', '-p', action='append', type=Path,
+                        help='Custom path(s) to scan for .jsonl session files (can be specified multiple times)')
     args = parser.parse_args()
 
     # Run the app
-    app = SessionViewerApp(workspace=args.workspace)
+    app = SessionViewerApp(workspace=args.workspace, custom_paths=args.path)
     app.run()
 
 
