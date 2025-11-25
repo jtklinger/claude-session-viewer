@@ -77,6 +77,8 @@ class Message:
     timestamp: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     line_num: int = 0
+    git_branch: Optional[str] = None
+    claude_version: Optional[str] = None
 
 
 # ============================================================================
@@ -459,18 +461,24 @@ class SessionLoader:
                         message = data.get('message', {})
                         content = SessionLoader._format_content(message.get('content', ''))
                         timestamp = data.get('timestamp')
+                        git_branch = data.get('gitBranch')
+                        claude_version = data.get('version')
 
                         messages.append(Message(
                             role='user',
                             content=content,
                             timestamp=timestamp,
-                            line_num=line_num
+                            line_num=line_num,
+                            git_branch=git_branch,
+                            claude_version=claude_version
                         ))
 
                     elif msg_type == 'assistant':
                         message = data.get('message', {})
                         content = SessionLoader._format_content(message.get('content', ''))
                         timestamp = data.get('timestamp')
+                        git_branch = data.get('gitBranch')
+                        claude_version = data.get('version')
 
                         # Extract metadata
                         metadata = {}
@@ -485,7 +493,9 @@ class SessionLoader:
                             content=content,
                             timestamp=timestamp,
                             metadata=metadata,
-                            line_num=line_num
+                            line_num=line_num,
+                            git_branch=git_branch,
+                            claude_version=claude_version
                         ))
 
                     if limit and len(messages) >= limit:
@@ -1218,6 +1228,22 @@ class SessionViewerApp(App):
         else:
             tag_label.display = False
 
+        # Helper function to format timestamp from UTC to local time
+        def format_timestamp(ts_str: Optional[str]) -> str:
+            if not ts_str:
+                return ""
+            try:
+                # Parse ISO format timestamp (UTC)
+                from datetime import timezone
+                if ts_str.endswith('Z'):
+                    ts_str = ts_str[:-1] + '+00:00'
+                utc_dt = datetime.fromisoformat(ts_str)
+                # Convert to local time
+                local_dt = utc_dt.replace(tzinfo=timezone.utc).astimezone()
+                return local_dt.strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                return ts_str
+
         # Build the conversation as plain text
         lines = []
         message_positions = []  # Track line numbers where messages start
@@ -1237,11 +1263,24 @@ class SessionViewerApp(App):
                 self.selected_session.file_path
             )
 
+            # Track git branch to show when it changes
+            current_git_branch = None
+
             for i, msg in enumerate(messages, 1):
+                # Show git branch if it changed
+                if msg.git_branch and msg.git_branch != current_git_branch:
+                    current_git_branch = msg.git_branch
+                    lines.append(f"[Git Branch: {current_git_branch}]")
+                    lines.append("")
+
+                # Format timestamp
+                timestamp_str = format_timestamp(msg.timestamp)
+                time_suffix = f" - {timestamp_str}" if timestamp_str else ""
+
                 if msg.role == 'user':
                     lines.append("")
                     lines.append("=" * 80)
-                    lines.append(f"USER (Message {i}):")
+                    lines.append(f"USER (Message {i}){time_suffix}:")
                     # Record the position of the USER line we just added
                     message_positions.append(len(lines) - 1)
                     lines.append("=" * 80)
@@ -1250,7 +1289,7 @@ class SessionViewerApp(App):
                 elif msg.role == 'assistant':
                     lines.append("")
                     lines.append("=" * 80)
-                    lines.append(f"ASSISTANT (Message {i}):")
+                    lines.append(f"ASSISTANT (Message {i}){time_suffix}:")
                     # Record the position of the ASSISTANT line we just added
                     message_positions.append(len(lines) - 1)
 
